@@ -1,0 +1,13 @@
+{
+  "/api/get-voter-names/route": "/api/get-voter-names",
+  "/favicon.ico/route": "/favicon.ico",
+  "/_not-found/page": "/_not-found",
+  "/auth/page": "/auth",
+  "/auth/reset-password/page": "/auth/reset-password",
+  "/projets/page": "/projets",
+  "/page": "/",
+  "/statistiques/page": "/statistiques",
+  "/projets/[id]/page": "/projets/[id]",
+  "/auth/confirm/page": "/auth/confirm",
+  "/communaute/page": "/communaute"
+}
