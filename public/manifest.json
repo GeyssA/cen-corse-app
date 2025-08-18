@@ -1,0 +1,53 @@
+{
+  "name": "CEN Corse - Plateforme de collaboration",
+  "short_name": "CEN Corse",
+  "description": "Application de gestion des projets et activités communautaires du CEN Corse",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e3a8a",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "fr",
+  "categories": ["productivity", "business"],
+  "icons": [
+    {
+      "src": "/logo_pwa.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo_pwa.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nouveau projet",
+      "short_name": "Projet",
+      "description": "Créer un nouveau projet",
+      "url": "/projets?create=true",
+      "icons": [
+        {
+          "src": "/logo_pwa.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Nouvelle activité",
+      "short_name": "Activité",
+      "description": "Créer une nouvelle activité",
+      "url": "/communaute?create=true",
+      "icons": [
+        {
+          "src": "/logo_pwa.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+} 

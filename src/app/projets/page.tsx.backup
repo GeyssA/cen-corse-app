@@ -1,0 +1,746 @@
+'use client'
+
+import Link from 'next/link'
+import { useState, useEffect } from 'react'
+
+interface NewProject {
+  title: string
+  description: string
+  employees: string[]
+  partners: string[]
+  startDate: string
+  endDate: string
+  pole: string
+  thematic: string
+  status: string
+}
+
+export default function Projets() {
+  const [activeFilter, setActiveFilter] = useState('all')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [newEmployee, setNewEmployee] = useState('')
+  const [newPartner, setNewPartner] = useState('')
+  const [selectedTags, setSelectedTags] = useState<{type: string, value: string}[]>([])
+  const [availableTags, setAvailableTags] = useState<{type: string, value: string}[]>([])
+  const [selectedTagType, setSelectedTagType] = useState('')
+  const [tagSearchTerm, setTagSearchTerm] = useState('')
+  const [projects, setProjects] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('projects')
+      if (stored) {
+        return JSON.parse(stored)
+      }
+    }
+    
+    return [
+    {
+      id: 1,
+      title: 'Analyse du génome humain',
+      description: 'Étude des variations génétiques dans la population avec partenaires: CNRS, Université Paris',
+      status: 'active',
+      progress: 75,
+      members: 4,
+      deadline: '2024-06-15',
+      startDate: '2024-01-15',
+      thematic: 'Génétique',
+      pole: 'Herpétologie',
+      employees: ['Marie Dubois', 'Jean Martin', 'Sophie Chen'],
+      partners: ['CNRS', 'Université Paris']
+    },
+    {
+      id: 2,
+      title: 'Développement de nouveaux médicaments',
+      description: 'Recherche sur les composés anti-cancéreux avec partenaires: INSERM, Sanofi',
+      status: 'active',
+      progress: 45,
+      members: 6,
+      deadline: '2024-08-20',
+      startDate: '2024-02-01',
+      thematic: 'Biochimie',
+      pole: 'Ornithologie',
+      employees: ['Thomas Leroy', 'Emma Rodriguez', 'Lucas Bernard'],
+      partners: ['INSERM', 'Sanofi']
+    },
+    {
+      id: 3,
+      title: 'Étude des cellules souches',
+      description: 'Différenciation cellulaire et régénération avec partenaires: Institut Pasteur',
+      status: 'completed',
+      progress: 100,
+      members: 3,
+      deadline: '2024-03-10',
+      startDate: '2023-09-01',
+      thematic: 'Biologie Cellulaire',
+      pole: 'Mesures compensatoires',
+      employees: ['Camille Moreau', 'Alexandre Petit'],
+      partners: ['Institut Pasteur']
+    },
+    {
+      id: 4,
+      title: 'Protéomique avancée',
+      description: 'Analyse des protéines dans les tissus cancéreux avec partenaires: CNRS, Roche',
+      status: 'planning',
+      progress: 10,
+      members: 5,
+      deadline: '2024-12-01',
+      startDate: '2024-05-01',
+      thematic: 'Biologie Moléculaire',
+      pole: 'Flore',
+              employees: ['Marie Dubois', 'Thomas Leroy', 'Emma Rodriguez'],
+        partners: ['CNRS', 'Roche']
+      }
+    ]
+  })
+  const [newProject, setNewProject] = useState<NewProject>({
+    title: '',
+    description: '',
+    employees: [],
+    partners: [],
+    startDate: '',
+    endDate: '',
+    pole: 'TOUS',
+    thematic: '',
+    status: 'planning'
+  })
+
+  const poles = [
+    'TOUS',
+    'Herpétologie',
+    'Ornithologie', 
+    'Mesures compensatoires',
+    'Flore',
+    'Sensibilisation',
+    'Communication'
+  ]
+
+
+
+  // Générer les tags disponibles
+  useEffect(() => {
+    const tags: {type: string, value: string}[] = []
+    
+    projects.forEach(project => {
+      // Tags pour les employés
+      project.employees.forEach(emp => {
+        if (!tags.some(t => t.type === 'employee' && t.value === emp)) {
+          tags.push({type: 'employee', value: emp})
+        }
+      })
+      
+      // Tags pour les partenaires
+      project.partners.forEach(partner => {
+        if (!tags.some(t => t.type === 'partner' && t.value === partner)) {
+          tags.push({type: 'partner', value: partner})
+        }
+      })
+      
+      // Tags pour les pôles
+      if (!tags.some(t => t.type === 'pole' && t.value === project.pole)) {
+        tags.push({type: 'pole', value: project.pole})
+      }
+    })
+    
+    setAvailableTags(tags)
+  }, [projects])
+
+  const filteredProjects = projects.filter(project => {
+    const statusMatch = activeFilter === 'all' || project.status === activeFilter
+    const searchMatch = project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                       project.description.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    // Filtrage par tags sélectionnés
+    const tagMatch = selectedTags.every(tag => {
+      switch (tag.type) {
+        case 'employee':
+          return project.employees.includes(tag.value)
+        case 'partner':
+          return project.partners.includes(tag.value)
+        case 'pole':
+          return project.pole === tag.value
+        default:
+          return true
+      }
+    })
+    
+    return statusMatch && searchMatch && tagMatch
+  })
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800'
+      case 'completed': return 'bg-blue-100 text-blue-800'
+      case 'planning': return 'bg-yellow-100 text-yellow-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'active': return 'En cours'
+      case 'completed': return 'Terminé'
+      case 'planning': return 'Planification'
+      default: return 'Inconnu'
+    }
+  }
+
+  // Calculer l'échéance automatiquement basée sur les dates
+  const calculateDeadline = (startDate: string, endDate: string) => {
+    const start = new Date(startDate).getTime()
+    const end = new Date(endDate).getTime()
+    const now = new Date().getTime()
+    
+    if (now <= start) return 0
+    if (now >= end) return 100
+    
+    return Math.round(((now - start) / (end - start)) * 100)
+  }
+
+  // État pour éviter l'erreur d'hydratation
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  const handleAddProject = () => {
+    // Créer un nouveau projet avec un ID unique
+    const newProjectWithId = {
+      id: Math.max(...projects.map(p => p.id)) + 1,
+      title: newProject.title,
+      description: newProject.description,
+      status: newProject.status,
+      progress: 0, // Nouveau projet commence à 0%
+      members: newProject.employees.length,
+      deadline: newProject.endDate,
+      startDate: newProject.startDate,
+      thematic: newProject.thematic,
+      pole: newProject.pole,
+      employees: newProject.employees,
+      partners: newProject.partners
+    }
+
+    // Ajouter le projet à la liste
+    const updatedProjects = [...projects, newProjectWithId]
+    setProjects(updatedProjects)
+    localStorage.setItem('projects', JSON.stringify(updatedProjects))
+    
+    // Fermer le modal et réinitialiser le formulaire
+    setShowAddModal(false)
+    setNewProject({
+      title: '',
+      description: '',
+      employees: [],
+      partners: [],
+      startDate: '',
+      endDate: '',
+      pole: 'TOUS',
+      thematic: '',
+      status: 'planning'
+    })
+    setNewEmployee('')
+  }
+
+  const addEmployee = () => {
+    if (newEmployee.trim() && !newProject.employees.includes(newEmployee.trim())) {
+      setNewProject({
+        ...newProject,
+        employees: [...newProject.employees, newEmployee.trim()]
+      })
+      setNewEmployee('')
+    }
+  }
+
+  const removeEmployee = (index: number) => {
+    setNewProject({
+      ...newProject,
+      employees: newProject.employees.filter((_, i) => i !== index)
+    })
+  }
+
+  // Calculer les statistiques
+  const totalProjects = projects.length
+  const activeProjects = projects.filter(p => p.status === 'active').length
+  const completedProjects = projects.filter(p => p.status === 'completed').length
+  const planningProjects = projects.filter(p => p.status === 'planning').length
+
+  return (
+    <div className="min-h-screen bg-blue-950 text-white">
+      {/* Header fixe */}
+      <header className="fixed top-0 left-0 right-0 bg-blue-800/95 backdrop-blur-sm p-4 border-b border-blue-600/30 z-50">
+        <div className="flex items-center justify-between">
+          <Link href="/" className="text-white hover:text-gray-300 transition-colors">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </Link>
+          <h1 className="text-xl font-bold text-white">Projets</h1>
+          <div className="flex items-center space-x-3">
+            <Link href="/" className="text-white hover:text-gray-300 transition-colors">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+            </Link>
+            <button 
+              onClick={() => setShowAddModal(true)}
+              className="relative p-2 text-white hover:text-gray-300 transition-all duration-300 group"
+            >
+              <div className="absolute inset-0 bg-blue-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <svg className="w-6 h-6 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Contenu principal avec padding pour la barre fixe */}
+      <div className="pt-20 pb-8">
+        {/* Résumé */}
+        <div className="max-w-md mx-auto px-4 mb-4">
+          <div className="bg-blue-800/30 backdrop-blur-sm rounded-lg p-3 border border-blue-600/30">
+          <div className="flex justify-between text-sm text-gray-300">
+            <span>Total: <span className="text-white font-medium">{totalProjects}</span></span>
+            <span>En cours: <span className="text-green-400 font-medium">{activeProjects}</span></span>
+            <span>Terminés: <span className="text-blue-400 font-medium">{completedProjects}</span></span>
+            <span>Planifiés: <span className="text-yellow-400 font-medium">{planningProjects}</span></span>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="max-w-md mx-auto px-4 mb-6">
+        <div className="flex space-x-2 mb-4">
+          {['all', 'active', 'completed', 'planning'].map((filter) => (
+            <button
+              key={filter}
+              onClick={() => setActiveFilter(filter)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                activeFilter === filter
+                  ? 'bg-white text-black'
+                  : 'bg-blue-800/50 text-white hover:bg-blue-700/50'
+              }`}
+            >
+              {filter === 'all' ? 'Tous' : 
+               filter === 'active' ? 'En cours' :
+               filter === 'completed' ? 'Terminés' : 'Planification'}
+            </button>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div className="mb-3">
+          <input
+            type="text"
+            placeholder="Rechercher un projet..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full p-2 bg-blue-800/30 border border-blue-600/30 rounded-lg text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+          />
+        </div>
+
+        {/* Tags sélectionnés */}
+        {selectedTags.length > 0 && (
+          <div className="mb-3">
+            <div className="flex flex-wrap gap-2">
+              {selectedTags.map((tag, index) => (
+                <div key={index} className="flex items-center bg-blue-600 text-white px-2 py-1 rounded-full text-xs">
+                  <span>{tag.value}</span>
+                  <button
+                    onClick={() => setSelectedTags(selectedTags.filter((_, i) => i !== index))}
+                    className="ml-1 text-white hover:text-red-200 cursor-pointer"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Sélecteur de tags */}
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-gray-300 mb-2">
+            Filtrer par tags
+          </label>
+          <div className="space-y-2">
+            {/* Sélecteur de catégorie */}
+            <select
+              value={selectedTagType}
+              onChange={(e) => {
+                setSelectedTagType(e.target.value)
+                setTagSearchTerm('')
+              }}
+              className="w-full p-2 bg-blue-800/30 border border-blue-600/30 rounded-lg text-white text-xs focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+            >
+              <option value="">Sélectionner une catégorie...</option>
+              <option value="employee">👤 Employés impliqués</option>
+              <option value="partner">🤝 Partenaires</option>
+              <option value="pole">🏢 Pôle</option>
+            </select>
+
+            {/* Barre de recherche pour les tags */}
+            {selectedTagType && (
+              <div className="mt-2">
+                <input
+                  type="text"
+                  placeholder={`Rechercher dans ${selectedTagType === 'employee' ? 'les employés' : selectedTagType === 'partner' ? 'les partenaires' : 'les pôles'}...`}
+                  value={tagSearchTerm}
+                  onChange={(e) => setTagSearchTerm(e.target.value)}
+                  className="w-full p-2 bg-blue-800/30 border border-blue-600/30 rounded-lg text-white placeholder-gray-400 text-xs focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+                />
+              </div>
+            )}
+
+            {/* Liste des tags filtrés */}
+            {selectedTagType && (
+              <div className="max-h-32 overflow-y-auto space-y-1">
+                {availableTags
+                  .filter(tag => tag.type === selectedTagType)
+                  .filter(tag => tag.value.toLowerCase().includes(tagSearchTerm.toLowerCase()))
+                  .map((tag) => (
+                    <button
+                      key={`${tag.type}-${tag.value}`}
+                      onClick={() => {
+                        if (!selectedTags.some(t => t.type === tag.type && t.value === tag.value)) {
+                          setSelectedTags([...selectedTags, tag])
+                          setTagSearchTerm('')
+                        }
+                      }}
+                      className="w-full text-left p-2 bg-blue-800/30 border border-blue-600/30 rounded-lg text-white text-xs hover:bg-blue-700/30 transition-colors"
+                    >
+                      <span className="text-blue-300 text-xs">
+                        {tag.type === 'employee' ? '👤' : tag.type === 'partner' ? '🤝' : '🏢'}
+                      </span>
+                      <span className="ml-2">{tag.value}</span>
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Projects List */}
+      <div className="max-w-md mx-auto px-4">
+        <div className="space-y-4">
+          {filteredProjects.map((project) => (
+            <div key={project.id} className="bg-blue-800/30 backdrop-blur-sm hover:bg-blue-700/40 p-4 rounded-xl cursor-pointer border border-blue-600/30 transition-colors">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-white mb-2">{project.title}</h3>
+                  <span className="text-blue-400 text-xs">{project.pole}</span>
+                </div>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
+                  {getStatusText(project.status)}
+                </span>
+              </div>
+
+              {/* Barre d'échéance */}
+              {isClient && (
+                <div className="mt-3 mb-3">
+                  <div className="flex justify-between text-xs text-gray-400 mb-1">
+                    <span>Échéance</span>
+                    <span>{calculateDeadline(project.startDate, project.deadline)}%</span>
+                  </div>
+                  <div className="w-full bg-blue-800/50 rounded-full h-2">
+                    <div 
+                      className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${calculateDeadline(project.startDate, project.deadline)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex space-x-2">
+                <Link href={`/projets/${project.id}`} className="flex-1">
+                  <button className="w-full p-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-sm font-medium transition-colors">
+                    Voir détails
+                  </button>
+                </Link>
+                <button 
+                  onClick={() => {
+                    if (confirm('Êtes-vous sûr de vouloir supprimer ce projet ?')) {
+                      const updatedProjects = projects.filter(p => p.id !== project.id)
+                      setProjects(updatedProjects)
+                      localStorage.setItem('projects', JSON.stringify(updatedProjects))
+                    }
+                  }}
+                  className="p-2 bg-red-600 hover:bg-red-700 rounded-lg text-white transition-colors"
+                  title="Supprimer le projet"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer className="mt-12 pb-6">
+        <div className="max-w-md mx-auto px-4 text-center">
+          <div className="text-gray-400 text-sm">
+            Designed by <span className="text-blue-400 font-medium">BukaLab</span>
+          </div>
+          <div className="text-gray-500 text-xs mt-1">
+            © 2024 Tous droits réservés
+          </div>
+        </div>
+      </footer>
+
+      {/* Add Project Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-blue-900/90 backdrop-blur-sm rounded-xl p-6 w-full max-w-md border border-blue-600/30 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-white">Ajouter un projet</h2>
+              <button 
+                onClick={() => setShowAddModal(false)}
+                className="text-gray-400 hover:text-white cursor-pointer transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Nom du projet */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Nom du projet
+                </label>
+                <input
+                  type="text"
+                  value={newProject.title}
+                  onChange={(e) => setNewProject({...newProject, title: e.target.value})}
+                  className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+                  placeholder="Entrez le nom du projet"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Description du projet
+                </label>
+                <textarea
+                  value={newProject.description}
+                  onChange={(e) => setNewProject({...newProject, description: e.target.value})}
+                  rows={3}
+                  className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+                  placeholder="Décrivez le projet"
+                />
+              </div>
+
+              {/* Employés impliqués */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Employés impliqués
+                </label>
+                <div className="space-y-3">
+                  {/* Input pour ajouter un employé */}
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      placeholder="Tapez le nom d'un employé..."
+                      value={newEmployee}
+                      onChange={(e) => setNewEmployee(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          addEmployee()
+                        }
+                      }}
+                      className="flex-1 p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+                    />
+                    <button
+                      type="button"
+                      onClick={addEmployee}
+                      className="px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                  
+                  {/* Tags des employés */}
+                  {newProject.employees.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {newProject.employees.map((employee, index) => (
+                        <div key={index} className="flex items-center space-x-2 bg-blue-600 text-white px-3 py-1 rounded-full text-sm">
+                          <span>{employee}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeEmployee(index)}
+                            className="text-white hover:text-red-200 transition-colors"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <p className="text-xs text-gray-500">
+                    Tapez le nom et appuyez sur Entrée ou cliquez sur + pour ajouter
+                  </p>
+                </div>
+              </div>
+
+              {/* Partenaires */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Partenaires
+                </label>
+                <div className="space-y-3">
+                  {/* Input pour ajouter un partenaire */}
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      placeholder="Tapez le nom d'un partenaire..."
+                      value={newPartner}
+                      onChange={(e) => setNewPartner(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          if (newPartner.trim() && !newProject.partners.includes(newPartner.trim())) {
+                            setNewProject({
+                              ...newProject,
+                              partners: [...newProject.partners, newPartner.trim()]
+                            })
+                            setNewPartner('')
+                          }
+                        }
+                      }}
+                      className="flex-1 p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newPartner.trim() && !newProject.partners.includes(newPartner.trim())) {
+                          setNewProject({
+                            ...newProject,
+                            partners: [...newProject.partners, newPartner.trim()]
+                          })
+                          setNewPartner('')
+                        }
+                      }}
+                      className="px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                  
+                  {/* Tags des partenaires */}
+                  {newProject.partners.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {newProject.partners.map((partner, index) => (
+                        <div key={index} className="flex items-center space-x-2 bg-green-600 text-white px-3 py-1 rounded-full text-sm">
+                          <span>{partner}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewProject({
+                                ...newProject,
+                                partners: newProject.partners.filter((_, i) => i !== index)
+                              })
+                            }}
+                            className="text-white hover:text-red-200 transition-colors"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <p className="text-xs text-gray-500">
+                    Tapez le nom et appuyez sur Entrée ou cliquez sur + pour ajouter
+                  </p>
+                </div>
+              </div>
+
+              {/* Dates */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Date de début
+                  </label>
+                  <input
+                    type="date"
+                    value={newProject.startDate}
+                    onChange={(e) => setNewProject({...newProject, startDate: e.target.value})}
+                    className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Date de fin
+                  </label>
+                  <input
+                    type="date"
+                    value={newProject.endDate}
+                    onChange={(e) => setNewProject({...newProject, endDate: e.target.value})}
+                    className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Pôle */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Pôle
+                </label>
+                <select
+                  value={newProject.pole}
+                  onChange={(e) => setNewProject({...newProject, pole: e.target.value})}
+                  className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+                >
+                  {poles.filter(pole => pole !== 'TOUS').map((pole) => (
+                    <option key={pole} value={pole} className="bg-gray-800 text-white">
+                      {pole}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Thématique */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Thématique
+                </label>
+                <input
+                  type="text"
+                  value={newProject.thematic || ''}
+                  onChange={(e) => setNewProject({...newProject, thematic: e.target.value})}
+                  className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+                  placeholder="Entrez la thématique du projet"
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex space-x-3 mt-6">
+              <button
+                onClick={handleAddProject}
+                className="flex-1 p-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition-colors"
+              >
+                Ajouter le projet
+              </button>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="flex-1 p-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-medium transition-colors"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+} 
