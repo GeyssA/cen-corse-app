@@ -19,14 +19,6 @@ export default function ProtectedRoute({
   const { user, profile, loading } = useAuth()
   const router = useRouter()
 
-  // Mode démonstration - permettre l'accès public temporairement
-  const isDemoMode = process.env.NODE_ENV === 'production' && window.location.hostname.includes('vercel.app')
-  
-  // Si en mode démo, afficher directement le contenu
-  if (isDemoMode) {
-    return <>{children}</>
-  }
-
   // Redirection si non connecté - utiliser useEffect pour éviter l'erreur de hooks
   React.useEffect(() => {
     if (!loading && !user) {
