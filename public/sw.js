@@ -108,27 +108,25 @@ async function handleApiRequest(request) {
   try {
     // Essayer d'abord la requête réseau
     const networkResponse = await fetch(request);
-    
-    // Si la requête réussit et est une méthode supportée, mettre en cache
-    const supportedMethods = ['GET', 'POST'];
-    if (networkResponse.ok && supportedMethods.includes(request.method)) {
+    // Ne mettre en cache que les requêtes GET et http(s)
+    if (
+      networkResponse.ok &&
+      request.method === 'GET' &&
+      request.url.startsWith('http')
+    ) {
       const cache = await caches.open(DYNAMIC_CACHE);
       cache.put(request, networkResponse.clone());
     }
-    
     return networkResponse;
   } catch (error) {
     console.log('📡 Service Worker: Hors ligne, utilisation du cache pour:', request.url);
-    
-    // En cas d'échec réseau, essayer le cache (sauf pour les méthodes non supportées)
-    const supportedMethods = ['GET', 'POST'];
-    if (supportedMethods.includes(request.method)) {
+    // En cas d'échec réseau, essayer le cache (seulement pour GET)
+    if (request.method === 'GET' && request.url.startsWith('http')) {
       const cachedResponse = await caches.match(request);
       if (cachedResponse) {
         return cachedResponse;
       }
     }
-    
     // Si pas en cache ou méthode non supportée, retourner une réponse d'erreur
     return new Response(
       JSON.stringify({ 
@@ -147,28 +145,23 @@ async function handleApiRequest(request) {
 // Gestion des requêtes statiques avec cache-first
 async function handleStaticRequest(request) {
   const cachedResponse = await caches.match(request);
-  
   if (cachedResponse) {
     return cachedResponse;
   }
-  
   try {
     const networkResponse = await fetch(request);
-    
-    if (networkResponse.ok) {
+    // Ne mettre en cache que les requêtes http(s)
+    if (networkResponse.ok && request.url.startsWith('http')) {
       const cache = await caches.open(DYNAMIC_CACHE);
       cache.put(request, networkResponse.clone());
     }
-    
     return networkResponse;
   } catch (error) {
     console.error('❌ Service Worker: Erreur lors de la récupération:', error);
-    
     // Retourner une page d'erreur hors ligne
     if (request.destination === 'document') {
       return caches.match('/');
     }
-    
     return new Response('Ressource non disponible hors ligne', { status: 404 });
   }
 }
