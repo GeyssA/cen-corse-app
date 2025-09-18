@@ -3,6 +3,7 @@ import { IBM_Plex_Sans, Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import AuthDebug from "@/components/debug/AuthDebug";
 import Script from "next/script";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -61,6 +62,7 @@ export default function RootLayout({
         <AuthProvider>
           <ThemeProvider>
             {children}
+            <AuthDebug />
           </ThemeProvider>
         </AuthProvider>
         <Script

@@ -95,7 +95,7 @@ export default function LoginForm({ onSwitchToSignUp, onSwitchToForgotPassword }
         setError(technicalError)
         setUserFriendlyError(friendlyError)
       } else if (result && !result.error) {
-        // Utiliser router.push au lieu de window.location.href pour éviter le rechargement complet
+        // Utiliser router.push au lieu de window.location.href pour une navigation plus fluide
         router.push('/')
       } else {
         const unexpectedError = 'Réponse inattendue du serveur.'

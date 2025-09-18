@@ -1,0 +1,19 @@
+# Configuration Supabase pour Vercel
+# Ajoutez ces variables dans votre dashboard Vercel > Settings > Environment Variables
+
+# URL de votre projet Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+
+# Clé anonyme Supabase (publique)
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+
+# Clé secrète Supabase (utilisée uniquement côté serveur)
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+
+# Configuration EmailJS (optionnel)
+NEXT_PUBLIC_EMAILJS_SERVICE_ID=service_votre_service_id
+NEXT_PUBLIC_EMAILJS_TEMPLATE_ID=template_votre_template_id
+NEXT_PUBLIC_EMAILJS_PUBLIC_KEY=votre_public_key
+
+# Configuration pour Vercel
+NEXT_PUBLIC_VERCEL_URL=your-vercel-app.vercel.app

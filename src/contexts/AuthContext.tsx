@@ -24,26 +24,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Récupérer la session initiale
     const getInitialSession = async () => {
       try {
+        console.log('🔍 Vérification de la session initiale...')
         const { data: { session }, error } = await supabase.auth.getSession()
         
         if (error) {
-          console.error('Erreur lors de la récupération de la session:', error)
+          console.error('❌ Erreur lors de la récupération de la session:', error)
           // Si erreur de token invalide, nettoyer la session
           if (error.message.includes('Invalid Refresh Token')) {
+            console.log('🔄 Token invalide, déconnexion...')
             await supabase.auth.signOut()
           }
+          setLoading(false)
+          return
         }
         
+        console.log('✅ Session récupérée:', !!session)
         setUser(session?.user ?? null)
         
         if (session?.user) {
+          console.log('👤 Récupération du profil utilisateur...')
           const userProfile = await getProfile(session.user.id)
           setProfile(userProfile)
+          console.log('✅ Profil récupéré:', !!userProfile)
         }
         
         setLoading(false)
       } catch (error) {
-        console.error('Erreur dans getInitialSession:', error)
+        console.error('❌ Erreur dans getInitialSession:', error)
         setLoading(false)
       }
     }
@@ -53,11 +60,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Écouter les changements d'authentification
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: string, session: unknown) => {
+        console.log('🔄 Changement d\'état d\'authentification:', event)
         setUser((session as any)?.user ?? null)
         
         if ((session as any)?.user) {
+          console.log('👤 Récupération du profil après changement d\'état...')
           const userProfile = await getProfile((session as any).user.id)
           setProfile(userProfile)
+          console.log('✅ Profil mis à jour:', !!userProfile)
         } else {
           setProfile(null)
         }
@@ -71,29 +81,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      setLoading(true)
+      console.log('🔐 Tentative de connexion pour:', email)
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
       
       if (error) {
-        console.error('Erreur de connexion:', error)
-        setLoading(false)
+        console.error('❌ Erreur de connexion:', error)
         return { error }
       }
       
-      if (data.user) {
-        setUser(data.user)
-        const userProfile = await getProfile(data.user.id)
-        setProfile(userProfile)
-      }
-      
-      setLoading(false)
+      console.log('✅ Connexion réussie:', !!data.user)
       return { error: null }
     } catch (err) {
-      console.error('Erreur inattendue lors de la connexion:', err)
-      setLoading(false)
+      console.error('❌ Erreur inattendue lors de la connexion:', err)
       return { error: err }
     }
   }
