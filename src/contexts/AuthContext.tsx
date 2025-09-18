@@ -71,18 +71,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      setLoading(true)
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
       
       if (error) {
         console.error('Erreur de connexion:', error)
+        setLoading(false)
+        return { error }
       }
       
-      return { error }
+      if (data.user) {
+        setUser(data.user)
+        const userProfile = await getProfile(data.user.id)
+        setProfile(userProfile)
+      }
+      
+      setLoading(false)
+      return { error: null }
     } catch (err) {
       console.error('Erreur inattendue lors de la connexion:', err)
+      setLoading(false)
       return { error: err }
     }
   }
@@ -102,7 +113,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
+    await supabase.auth.signOut();
+    setUser(null);
+    setProfile(null);
   }
 
   const updateUserProfile = async () => {

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 
 interface Project {
   id: number
@@ -21,6 +21,7 @@ interface Project {
 
 export default function ProjectDetails() {
   const params = useParams()
+  const router = useRouter()
   const projectId = parseInt(params.id as string)
 
   // Récupérer les projets depuis le localStorage
@@ -154,7 +155,7 @@ export default function ProjectDetails() {
       
       // Afficher un message de confirmation et rediriger
       alert('Modifications sauvegardées avec succès !')
-      window.location.href = '/projets'
+      router.push('/projets')
     }
   }
 
@@ -310,7 +311,7 @@ export default function ProjectDetails() {
                 const updatedProjects = projects.filter(p => p.id !== projectId)
                 setProjects(updatedProjects)
                 localStorage.setItem('projects', JSON.stringify(updatedProjects))
-                window.location.href = '/projets'
+                router.push('/projets')
               }
             }}
             className="p-2 bg-red-600 hover:bg-red-700 rounded-lg text-white transition-colors"

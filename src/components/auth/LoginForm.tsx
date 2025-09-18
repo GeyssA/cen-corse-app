@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useRouter } from 'next/navigation'
 
 interface LoginFormProps {
   onSwitchToSignUp: () => void
@@ -19,6 +20,7 @@ export default function LoginForm({ onSwitchToSignUp, onSwitchToForgotPassword }
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false)
   
   const { signIn } = useAuth()
+  const router = useRouter()
 
   // Fonction pour traduire les erreurs techniques en messages compréhensibles
   const translateError = (errorMessage: string): string => {
@@ -93,7 +95,8 @@ export default function LoginForm({ onSwitchToSignUp, onSwitchToForgotPassword }
         setError(technicalError)
         setUserFriendlyError(friendlyError)
       } else if (result && !result.error) {
-        window.location.href = '/'
+        // Utiliser router.push au lieu de window.location.href pour éviter le rechargement complet
+        router.push('/')
       } else {
         const unexpectedError = 'Réponse inattendue du serveur.'
         setError(unexpectedError)

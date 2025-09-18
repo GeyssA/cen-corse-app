@@ -6,10 +6,12 @@ import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { getRoleDisplayName } from '@/lib/auth'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useRouter } from 'next/navigation'
 
 export default function UserMenu() {
   const { user, profile, signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
+  const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [showAboutModal, setShowAboutModal] = useState(false)
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 })
@@ -38,11 +40,11 @@ export default function UserMenu() {
       await signOut()
       setIsOpen(false)
       // Rediriger vers la page d'authentification
-      window.location.href = '/auth'
+      router.push('/auth')
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error)
       // En cas d'erreur, forcer la redirection
-      window.location.href = '/auth'
+      router.push('/auth')
     }
   }
 
