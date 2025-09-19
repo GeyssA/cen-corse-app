@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { getCachedData, clearCache, isOnline } from '@/lib/cache'
+import { getCachedData, clearCache, isOnline, clearCacheAndRedirectToAuth } from '@/lib/cache'
 
 export default function CacheStatus() {
   const [cacheInfo, setCacheInfo] = useState<{
@@ -63,6 +63,10 @@ export default function CacheStatus() {
     })
   }
 
+  const handleResetApp = () => {
+    clearCacheAndRedirectToAuth()
+  }
+
   if (!cacheInfo) return null
 
   return (
@@ -81,12 +85,20 @@ export default function CacheStatus() {
           <div className="text-xs text-gray-600 dark:text-gray-400">
             <div>📱 Cache: {cacheInfo.projects} projets, {cacheInfo.activities} activités</div>
             <div>🕒 Mis à jour: {cacheInfo.lastUpdated}</div>
-            <button
-              onClick={handleClearCache}
-              className="mt-1 text-xs text-red-600 hover:text-red-800 underline"
-            >
-              Vider le cache
-            </button>
+            <div className="mt-1 space-y-1">
+              <button
+                onClick={handleClearCache}
+                className="block text-xs text-red-600 hover:text-red-800 underline"
+              >
+                Vider le cache
+              </button>
+              <button
+                onClick={handleResetApp}
+                className="block text-xs text-blue-600 hover:text-blue-800 underline"
+              >
+                Réinitialiser l'app
+              </button>
+            </div>
           </div>
         ) : (
           <div className="text-xs text-gray-500 dark:text-gray-500">

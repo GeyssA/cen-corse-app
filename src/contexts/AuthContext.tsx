@@ -46,6 +46,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const userProfile = await getProfile(session.user.id)
           setProfile(userProfile)
           console.log('✅ Profil récupéré:', !!userProfile)
+        } else {
+          // Pas de session - vérifier si on est sur une page protégée
+          console.log('❌ Aucune session trouvée')
+          if (typeof window !== 'undefined') {
+            const currentPath = window.location.pathname
+            const protectedPaths = ['/projets', '/communaute', '/statistiques', '/gallery', '/presentation', '/signalement', '/supports']
+            
+            if (protectedPaths.some(path => currentPath.startsWith(path))) {
+              console.log('🔄 Redirection vers la page d\'authentification...')
+              window.location.href = '/auth'
+              return
+            }
+          }
         }
         
         setLoading(false)

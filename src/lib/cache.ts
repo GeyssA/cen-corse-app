@@ -103,6 +103,15 @@ export function clearCacheAndReload(): void {
   }
 }
 
+// Vider le cache et rediriger vers l'authentification
+export function clearCacheAndRedirectToAuth(): void {
+  clearCache()
+  if (typeof window !== 'undefined') {
+    console.log('🔄 Cache vidé et redirection vers /auth')
+    window.location.href = '/auth'
+  }
+}
+
 // Vérifier si on est en ligne
 export function isOnline(): boolean {
   if (typeof window === 'undefined') return true

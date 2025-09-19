@@ -90,7 +90,12 @@ self.addEventListener('fetch', (event) => {
   }
   // Pages HTML → TOUJOURS réseau, JAMAIS de cache
   else if (request.destination === 'document' || request.destination === 'navigate') {
-    event.respondWith(fetch(request));
+    // Permettre le rechargement de la page d'authentification
+    if (url.pathname === '/auth' || url.pathname.startsWith('/auth/')) {
+      event.respondWith(fetch(request));
+    } else {
+      event.respondWith(fetch(request));
+    }
   }
   // Images et ressources statiques → cache first avec fallback
   else if (request.method === 'GET' && (
