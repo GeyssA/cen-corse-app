@@ -85,7 +85,7 @@ export default function UserMenu() {
     setIsOpen((prev) => !prev)
   }
 
-  if (!user || !profile) return null
+  if (!user) return null
 
   // Menu déroulant via portail
   const menuDropdown = isOpen && typeof window !== 'undefined'
@@ -104,15 +104,15 @@ export default function UserMenu() {
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
               <span className="text-white text-sm font-semibold">
-                {profile.full_name?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase()}
+                {profile?.full_name?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase()}
               </span>
             </div>
             <div>
               <p className="text-sm font-semibold text-white">
-                {profile.full_name || user.email}
+                {profile?.full_name || user.email}
               </p>
               <p className="text-xs text-gray-300 font-medium">
-                {getRoleDisplayName(profile.role)}
+                {profile ? getRoleDisplayName(profile.role) : 'Chargement...'}
               </p>
             </div>
           </div>
@@ -209,7 +209,7 @@ export default function UserMenu() {
       >
         <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow">
           <span className="text-white text-sm font-semibold">
-            {profile.full_name?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase()}
+            {profile?.full_name?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase()}
           </span>
         </div>
         <svg
