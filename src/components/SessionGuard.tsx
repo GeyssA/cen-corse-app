@@ -13,6 +13,14 @@ export default function SessionGuard({ children }: SessionGuardProps) {
   const router = useRouter()
 
   useEffect(() => {
+    // TIMEOUT DE SÉCURITÉ : Si on charge plus de 2 secondes, rediriger vers /auth
+    const safetyTimeout = setTimeout(() => {
+      if (loading) {
+        console.log('🚨 TIMEOUT DE SÉCURITÉ - Redirection vers /auth')
+        router.push('/auth')
+      }
+    }, 2000)
+
     // Attendre que l'authentification soit vérifiée
     if (loading) return
 
@@ -26,6 +34,8 @@ export default function SessionGuard({ children }: SessionGuardProps) {
         router.push('/auth')
       }
     }
+
+    return () => clearTimeout(safetyTimeout)
   }, [user, loading, router])
 
   // Si on charge, afficher un chargement simple

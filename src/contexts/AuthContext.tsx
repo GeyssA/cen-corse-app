@@ -21,14 +21,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Récupérer la session initiale - VERSION SIMPLE
+    // SOLUTION RADICALE : TIMEOUT AGRESSIF + FALLBACK
     const getInitialSession = async () => {
       try {
-        console.log('🔍 Vérification de la session...')
+        console.log('🔍 Vérification de la session (timeout 1s)...')
         
-        // TIMEOUT de 3 secondes maximum
+        // TIMEOUT AGRESSIF de 1 seconde maximum
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 3000)
+          setTimeout(() => reject(new Error('Timeout 1s')), 1000)
         )
         
         const sessionPromise = supabase.auth.getSession()
@@ -36,34 +36,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]) as any
         
         if (error || !session) {
-          console.log('❌ Pas de session - redirection vers /auth')
+          console.log('❌ Pas de session ou timeout - redirection immédiate vers /auth')
+          // REDIRECTION IMMÉDIATE vers /auth
           if (typeof window !== 'undefined') {
-            const currentPath = window.location.pathname
-            const protectedPaths = ['/projets', '/communaute', '/statistiques', '/gallery', '/presentation', '/signalement', '/supports']
-            
-            if (protectedPaths.some(path => currentPath.startsWith(path))) {
-              window.location.href = '/auth'
-              return
-            }
+            window.location.href = '/auth'
           }
-          setLoading(false)
           return
         }
         
-        console.log('✅ Session trouvée')
+        console.log('✅ Session trouvée rapidement')
         setUser(session.user)
         
-        // Récupérer le profil rapidement
-        try {
-          const userProfile = await getProfile(session.user.id)
+        // Récupérer le profil en arrière-plan (sans bloquer)
+        getProfile(session.user.id).then(userProfile => {
           setProfile(userProfile)
-        } catch (profileError) {
+        }).catch(() => {
           console.log('⚠️ Erreur profil, mais on continue')
-        }
+        })
         
         setLoading(false)
       } catch (error) {
-        console.log('❌ Erreur session - redirection vers /auth')
+        console.log('❌ Timeout ou erreur - redirection immédiate vers /auth')
+        // REDIRECTION IMMÉDIATE vers /auth
         if (typeof window !== 'undefined') {
           window.location.href = '/auth'
         }
