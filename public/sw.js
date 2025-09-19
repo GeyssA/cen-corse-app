@@ -74,7 +74,7 @@ self.addEventListener('fetch', (event) => {
   if (url.hostname.includes('supabase.co') || url.pathname.startsWith('/api/')) {
     event.respondWith(handleApiRequest(request));
   }
-  // Stratégie pour les pages HTML - toujours réseau d'abord
+  // Stratégie pour les pages HTML - TOUJOURS réseau, JAMAIS de cache
   else if (request.destination === 'document' || request.destination === 'navigate') {
     event.respondWith(handlePageRequest(request));
   }
@@ -90,6 +90,35 @@ self.addEventListener('fetch', (event) => {
 
 // Gestion des requêtes de pages - réseau d'abord, puis cache
 async function handlePageRequest(request) {
+  // Détecter si c'est un refresh (F5, Ctrl+R, ou refresh mobile)
+  const isRefresh = request.headers.get('cache-control') === 'no-cache' || 
+                   request.headers.get('pragma') === 'no-cache' ||
+                   request.url.includes('_refresh=') ||
+                   request.headers.get('sec-fetch-mode') === 'navigate';
+  
+  if (isRefresh) {
+    console.log('🔄 Service Worker: Refresh détecté, vidage complet du cache');
+    
+    // Vider TOUS les caches
+    const cacheNames = await caches.keys();
+    await Promise.all(
+      cacheNames.map(cacheName => caches.delete(cacheName))
+    );
+    
+    // Vider le localStorage et sessionStorage
+    try {
+      const clients = await self.clients.matchAll();
+      clients.forEach(client => {
+        client.postMessage({ 
+          type: 'CLEAR_STORAGE',
+          action: 'clearAll'
+        });
+      });
+    } catch (error) {
+      console.log('Erreur lors du vidage du storage:', error);
+    }
+  }
+
   // Pour les pages HTML, toujours vider le cache et forcer le réseau
   if (request.destination === 'document' || request.destination === 'navigate') {
     console.log('🔄 Service Worker: Page HTML détectée, vidage du cache pour:', request.url);

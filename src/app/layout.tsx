@@ -111,6 +111,17 @@ export default function RootLayout({
                       console.log('SW registration failed: ', registrationError);
                     });
                 });
+
+                // Écouter les messages du service worker
+                if ('serviceWorker' in navigator) {
+                  navigator.serviceWorker.addEventListener('message', function(event) {
+                    if (event.data.type === 'CLEAR_STORAGE') {
+                      console.log('🧹 Vidage du storage demandé par le service worker');
+                      localStorage.clear();
+                      sessionStorage.clear();
+                    }
+                  });
+                }
                 
                 // Exposer les fonctions globalement pour le débogage
                 window.forceUpdate = forceUpdate;
