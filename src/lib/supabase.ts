@@ -8,7 +8,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
     url: !!supabaseUrl,
     key: !!supabaseAnonKey
   })
-  throw new Error('Configuration Supabase manquante. Vérifiez vos variables d\'environnement.')
+  // En mode build, ne pas lancer d'erreur
+  if (process.env.NODE_ENV === 'production' && typeof window === 'undefined') {
+    console.warn('⚠️ Build en cours, variables Supabase non disponibles')
+  } else {
+    throw new Error('Configuration Supabase manquante. Vérifiez vos variables d\'environnement.')
+  }
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
