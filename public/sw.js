@@ -15,18 +15,30 @@ self.addEventListener('install', (event) => {
   console.log('🔄 Service Worker: Installation en cours...');
   
   event.waitUntil(
-    caches.open(STATIC_CACHE)
-      .then((cache) => {
-        console.log('✅ Service Worker: Cache statique créé');
-        return cache.addAll(STATIC_ASSETS);
-      })
-      .then(() => {
-        console.log('✅ Service Worker: Installation terminée');
-        return self.skipWaiting();
-      })
-      .catch((error) => {
-        console.error('❌ Service Worker: Erreur lors de l\'installation:', error);
-      })
+    // Vider tous les anciens caches d'abord
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          console.log('🗑️ Service Worker: Suppression de l\'ancien cache:', cacheName);
+          return caches.delete(cacheName);
+        })
+      );
+    })
+    .then(() => {
+      // Créer le nouveau cache statique
+      return caches.open(STATIC_CACHE);
+    })
+    .then((cache) => {
+      console.log('✅ Service Worker: Cache statique créé');
+      return cache.addAll(STATIC_ASSETS);
+    })
+    .then(() => {
+      console.log('✅ Service Worker: Installation terminée');
+      return self.skipWaiting();
+    })
+    .catch((error) => {
+      console.error('❌ Service Worker: Erreur lors de l\'installation:', error);
+    })
   );
 });
 
@@ -78,14 +90,39 @@ self.addEventListener('fetch', (event) => {
 
 // Gestion des requêtes de pages - réseau d'abord, puis cache
 async function handlePageRequest(request) {
+  // Pour les pages HTML, toujours vider le cache et forcer le réseau
+  if (request.destination === 'document' || request.destination === 'navigate') {
+    console.log('🔄 Service Worker: Page HTML détectée, vidage du cache pour:', request.url);
+    
+    // Vider le cache pour cette page
+    const cache = await caches.open(DYNAMIC_CACHE);
+    await cache.delete(request);
+    
+    // Vider aussi le cache statique si c'est la page d'accueil
+    if (request.url.endsWith('/') || request.url.includes('index')) {
+      await cache.delete('/');
+    }
+  }
+
   try {
-    // Essayer d'abord la requête réseau
-    const networkResponse = await fetch(request);
+    // Essayer d'abord la requête réseau avec no-cache pour les pages
+    const networkRequest = new Request(request, {
+      cache: 'no-cache',
+      headers: {
+        ...request.headers,
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
+    
+    const networkResponse = await fetch(networkRequest);
     
     if (networkResponse.ok) {
-      // Mettre en cache la nouvelle version
-      const cache = await caches.open(DYNAMIC_CACHE);
-      cache.put(request, networkResponse.clone());
+      // Ne pas mettre en cache les pages HTML pour éviter les problèmes
+      if (request.destination !== 'document' && request.destination !== 'navigate') {
+        const cache = await caches.open(DYNAMIC_CACHE);
+        cache.put(request, networkResponse.clone());
+      }
     }
     
     return networkResponse;
