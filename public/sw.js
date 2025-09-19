@@ -59,9 +59,26 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Pour les PWA installées, être plus permissif au démarrage
-  const isInitialLoad = request.destination === 'document' && 
-                       (url.pathname === '/' || url.pathname === '/auth');
+  // Détecter si c'est un refresh (F5, Ctrl+R, pull-to-refresh mobile)
+  const isRefresh = request.headers.get('cache-control') === 'no-cache' || 
+                   request.headers.get('pragma') === 'no-cache' ||
+                   request.headers.get('sec-fetch-mode') === 'navigate';
+
+  // BLOQUER les refresh dans la PWA
+  if (isRefresh && (request.destination === 'document' || request.destination === 'navigate')) {
+    console.log('🚫 Service Worker: Refresh bloqué dans la PWA');
+    // Retourner la page actuelle depuis le cache au lieu de faire un refresh
+    event.respondWith(
+      caches.match(request).then(response => {
+        if (response) {
+          return response;
+        }
+        // Si pas en cache, retourner la page d'accueil
+        return caches.match('/');
+      })
+    );
+    return;
+  }
 
   // Supabase Auth & API → TOUJOURS réseau, JAMAIS de cache
   if (url.hostname.includes('supabase.co') || url.pathname.startsWith('/api/')) {
@@ -69,10 +86,6 @@ self.addEventListener('fetch', (event) => {
   }
   // Pages HTML → TOUJOURS réseau, JAMAIS de cache
   else if (request.destination === 'document' || request.destination === 'navigate') {
-    // Pour le chargement initial, être encore plus permissif
-    if (isInitialLoad) {
-      console.log('🚀 Service Worker: Chargement initial PWA détecté, passage direct au réseau');
-    }
     event.respondWith(fetch(request));
   }
   // Ressources statiques seulement → cache first

@@ -1,5 +1,23 @@
 @import "tailwindcss";
 
+/* Bloquer le pull-to-refresh sur mobile */
+html, body {
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Empêcher le refresh par geste */
+body {
+  touch-action: pan-x pan-y;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
 :root {
   /* Palette de couleurs moderne et sophistiquée */
   --background: #0a0a0a;

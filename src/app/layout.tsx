@@ -4,7 +4,6 @@ import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import AuthDebug from "@/components/debug/AuthDebug";
-import CacheManager from "@/components/CacheManager";
 import PWADebug from "@/components/PWADebug";
 import Script from "next/script";
 
@@ -25,7 +24,7 @@ export const metadata: Metadata = {
   description: "Application communautaire du CEN Corse",
   manifest: "/manifest.json",
   themeColor: "#1e3a8a",
-  viewport: "width=device-width, initial-scale=0.9, maximum-scale=1, user-scalable=no",
+  viewport: "width=device-width, initial-scale=0.9, maximum-scale=1, user-scalable=no, viewport-fit=cover",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -65,7 +64,6 @@ export default function RootLayout({
           <ThemeProvider>
             {children}
             <AuthDebug />
-            <CacheManager />
             <PWADebug />
           </ThemeProvider>
         </AuthProvider>
