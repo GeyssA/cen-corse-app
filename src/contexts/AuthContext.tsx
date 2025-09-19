@@ -5,6 +5,7 @@ import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { getProfile, Profile, AuthState } from '@/lib/auth'
 import { cacheProfile, getCachedProfile, clearProfileCache } from '@/lib/profile-cache'
+import { getOptimizedProfile } from '@/lib/profile-optimized'
 
 interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<{ error: unknown }>
@@ -79,21 +80,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Sauvegarder le timestamp de la session
         localStorage.setItem('lastSessionTime', now.toString())
         
-        // Récupérer le profil en arrière-plan
-        getProfile(session.user.id).then(userProfile => {
-          setProfile(userProfile)
-          // Mettre en cache le profil
-          if (userProfile) {
-            cacheProfile(userProfile)
-          }
-        }).catch(() => {
-          console.log('⚠️ Erreur profil, essayer le cache')
-          // En cas d'erreur, essayer le cache
-          const cachedProfile = getCachedProfile()
-          if (cachedProfile) {
-            setProfile(cachedProfile)
-          }
-        })
+        // Récupérer le profil de manière optimisée
+        const profile = await getOptimizedProfile(session.user.id)
+        if (profile) {
+          setProfile(profile)
+        }
         
         setLoading(false)
       } catch (error) {
@@ -140,15 +131,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser((session as any)?.user ?? null)
         
             if ((session as any)?.user) {
-              console.log('👤 Récupération du profil après changement d\'état...')
-              const userProfile = await getProfile((session as any).user.id)
-              setProfile(userProfile)
-              console.log('✅ Profil mis à jour:', !!userProfile)
+              console.log('👤 Changement d\'état d\'authentification détecté')
               
-              // Mettre en cache le profil
-              if (userProfile) {
-                cacheProfile(userProfile)
-              }
+              // Récupérer le profil de manière optimisée
+              getOptimizedProfile((session as any).user.id).then(profile => {
+                if (profile) {
+                  setProfile(profile)
+                }
+              })
               
               // Mettre à jour le timestamp de session
               localStorage.setItem('lastSessionTime', Date.now().toString())
