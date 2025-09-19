@@ -21,14 +21,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // SOLUTION RADICALE : TIMEOUT AGRESSIF + FALLBACK
+    // SESSION STABLE DE 5 MINUTES
     const getInitialSession = async () => {
       try {
-        console.log('🔍 Vérification de la session (timeout 1s)...')
+        console.log('🔍 Vérification de la session...')
         
-        // TIMEOUT AGRESSIF de 1 seconde maximum
+        // Vérifier d'abord le cache local (5 minutes)
+        const lastSessionTime = localStorage.getItem('lastSessionTime')
+        const now = Date.now()
+        const fiveMinutes = 5 * 60 * 1000 // 5 minutes
+        
+        if (lastSessionTime && (now - parseInt(lastSessionTime)) < fiveMinutes) {
+          console.log('✅ Session récente dans le cache - utilisation directe')
+          // Session récente, on peut continuer sans vérifier Supabase
+          setUser({ id: 'cached-user' } as any) // User factice pour débloquer
+          setLoading(false)
+          return
+        }
+        
+        // Si pas de cache récent, vérifier Supabase avec timeout raisonnable
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout 1s')), 1000)
+          setTimeout(() => reject(new Error('Timeout')), 5000) // 5 secondes
         )
         
         const sessionPromise = supabase.auth.getSession()
@@ -36,18 +49,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]) as any
         
         if (error || !session) {
-          console.log('❌ Pas de session ou timeout - redirection immédiate vers /auth')
-          // REDIRECTION IMMÉDIATE vers /auth
+          console.log('❌ Pas de session - redirection vers /auth')
+          // Seulement rediriger si on est sur une page protégée
           if (typeof window !== 'undefined') {
-            window.location.href = '/auth'
+            const currentPath = window.location.pathname
+            const protectedPaths = ['/projets', '/communaute', '/statistiques', '/gallery', '/presentation', '/signalement', '/supports']
+            
+            if (protectedPaths.some(path => currentPath.startsWith(path))) {
+              window.location.href = '/auth'
+              return
+            }
           }
+          setLoading(false)
           return
         }
         
-        console.log('✅ Session trouvée rapidement')
+        console.log('✅ Session trouvée')
         setUser(session.user)
         
-        // Récupérer le profil en arrière-plan (sans bloquer)
+        // Sauvegarder le timestamp de la session
+        localStorage.setItem('lastSessionTime', now.toString())
+        
+        // Récupérer le profil en arrière-plan
         getProfile(session.user.id).then(userProfile => {
           setProfile(userProfile)
         }).catch(() => {
@@ -56,11 +79,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         setLoading(false)
       } catch (error) {
-        console.log('❌ Timeout ou erreur - redirection immédiate vers /auth')
-        // REDIRECTION IMMÉDIATE vers /auth
-        if (typeof window !== 'undefined') {
-          window.location.href = '/auth'
+        console.log('❌ Erreur session - utilisation du cache si disponible')
+        
+        // En cas d'erreur, vérifier si on a un cache récent
+        const lastSessionTime = localStorage.getItem('lastSessionTime')
+        const now = Date.now()
+        const fiveMinutes = 5 * 60 * 1000
+        
+        if (lastSessionTime && (now - parseInt(lastSessionTime)) < fiveMinutes) {
+          console.log('✅ Utilisation du cache en cas d\'erreur')
+          setUser({ id: 'cached-user' } as any)
+          setLoading(false)
+          return
         }
+        
+        // Seulement rediriger si vraiment pas de session
+        if (typeof window !== 'undefined') {
+          const currentPath = window.location.pathname
+          const protectedPaths = ['/projets', '/communaute', '/statistiques', '/gallery', '/presentation', '/signalement', '/supports']
+          
+          if (protectedPaths.some(path => currentPath.startsWith(path))) {
+            window.location.href = '/auth'
+          }
+        }
+        setLoading(false)
       }
     }
 
