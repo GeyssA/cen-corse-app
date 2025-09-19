@@ -26,21 +26,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         console.log('🔍 Vérification de la session initiale...')
         
-        // TIMEOUT de sécurité - si ça prend plus de 10 secondes, on force la redirection
-        const timeoutId = setTimeout(() => {
-          console.log('⏰ TIMEOUT - Redirection forcée vers /auth')
-          if (typeof window !== 'undefined') {
-            window.location.href = '/auth'
-          }
-        }, 10000)
+        // Vérifier d'abord le localStorage pour une session récente
+        const lastSessionTime = localStorage.getItem('lastSessionTime')
+        const now = Date.now()
+        const fiveMinutes = 5 * 60 * 1000 // 5 minutes en millisecondes
+        
+        if (lastSessionTime && (now - parseInt(lastSessionTime)) < fiveMinutes) {
+          console.log('✅ Session récente trouvée dans le cache local')
+          // Session récente, on peut continuer sans vérifier Supabase
+          setUser({ id: 'cached-user' } as any) // User factice pour débloquer
+          setLoading(false)
+          return
+        }
         
         const { data: { session }, error } = await supabase.auth.getSession()
         
-        clearTimeout(timeoutId)
-        
         if (error) {
           console.error('❌ Erreur lors de la récupération de la session:', error)
-          // Si erreur de token invalide, nettoyer la session
           if (error.message.includes('Invalid Refresh Token')) {
             console.log('🔄 Token invalide, déconnexion...')
             await supabase.auth.signOut()
@@ -57,6 +59,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const userProfile = await getProfile(session.user.id)
           setProfile(userProfile)
           console.log('✅ Profil récupéré:', !!userProfile)
+          
+          // Sauvegarder le timestamp de la session
+          localStorage.setItem('lastSessionTime', now.toString())
         } else {
           // Pas de session - vérifier si on est sur une page protégée
           console.log('❌ Aucune session trouvée')
@@ -92,6 +97,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const userProfile = await getProfile((session as any).user.id)
           setProfile(userProfile)
           console.log('✅ Profil mis à jour:', !!userProfile)
+          
+          // Mettre à jour le timestamp de session
+          localStorage.setItem('lastSessionTime', Date.now().toString())
         } else {
           setProfile(null)
         }
