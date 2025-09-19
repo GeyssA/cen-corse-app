@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import { getCachedData, setCachedData, isOnline } from './cache'
-import { robustSupabaseQuery, robustQueryWithCache } from './supabase-robust'
+import { optimizedSupabaseQuery } from './supabase-optimized'
 
 export interface Project {
   id?: string
@@ -43,7 +43,7 @@ export interface ProjectThematic {
 
 // Récupérer tous les projets avec pagination
 export async function getProjects(limit = 10, offset = 0): Promise<Project[]> {
-  const result = await robustSupabaseQuery(
+  const result = await optimizedSupabaseQuery(
     async () => {
       const queryResult = await supabase
         .from('projects')
@@ -437,14 +437,14 @@ export async function getProjectsWithDetails(limit = 100, offset = 0): Promise<(
     // Si pas de cache ou pagination, récupérer depuis Supabase
     console.log('🌐 Récupération des projets depuis Supabase')
     
-    // Récupérer tous les projets avec retry
-    const projectsResult = await robustSupabaseQuery(
+    // Récupérer tous les projets avec retry optimisé
+    const projectsResult = await optimizedSupabaseQuery(
       async () => {
         const result = await supabase
-      .from('projects')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
+          .from('projects')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1)
         return result
       }
     )
@@ -468,35 +468,35 @@ export async function getProjectsWithDetails(limit = 100, offset = 0): Promise<(
       return []
     }
 
-    // Récupérer les employés avec retry
-    const employeesResult = await robustSupabaseQuery(
+    // Récupérer les employés avec retry optimisé
+    const employeesResult = await optimizedSupabaseQuery(
       async () => {
         const result = await supabase
-      .from('project_employees')
-      .select('project_id, employee_name')
-      .in('project_id', projects.map(p => p.id))
+          .from('project_employees')
+          .select('project_id, employee_name')
+          .in('project_id', projects.map(p => p.id))
         return result
       }
     )
 
-    // Récupérer les partenaires avec retry
-    const partnersResult = await robustSupabaseQuery(
+    // Récupérer les partenaires avec retry optimisé
+    const partnersResult = await optimizedSupabaseQuery(
       async () => {
         const result = await supabase
-      .from('project_partners')
-      .select('project_id, partner_name')
-      .in('project_id', projects.map(p => p.id))
+          .from('project_partners')
+          .select('project_id, partner_name')
+          .in('project_id', projects.map(p => p.id))
         return result
       }
     )
 
-    // Récupérer les thématiques avec retry
-    const thematicsResult = await robustSupabaseQuery(
+    // Récupérer les thématiques avec retry optimisé
+    const thematicsResult = await optimizedSupabaseQuery(
       async () => {
         const result = await supabase
-      .from('project_thematics')
-      .select('project_id, thematic_name')
-      .in('project_id', projects.map(p => p.id))
+          .from('project_thematics')
+          .select('project_id, thematic_name')
+          .in('project_id', projects.map(p => p.id))
         return result
       }
     )

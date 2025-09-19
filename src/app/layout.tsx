@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import SessionGuard from "@/components/SessionGuard";
+import ConnectionDiagnostic from "@/components/ConnectionDiagnostic";
 import Script from "next/script";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -64,6 +65,7 @@ export default function RootLayout({
             <SessionGuard>
               {children}
             </SessionGuard>
+            <ConnectionDiagnostic />
           </ThemeProvider>
         </AuthProvider>
         <Script
