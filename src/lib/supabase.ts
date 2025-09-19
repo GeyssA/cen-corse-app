@@ -1,12 +1,12 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
   console.error('❌ Variables d\'environnement Supabase manquantes:', {
-    url: !!supabaseUrl,
-    key: !!supabaseAnonKey
+    url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+    key: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   })
   // En mode build, ne pas lancer d'erreur
   if (process.env.NODE_ENV === 'production' && typeof window === 'undefined') {
