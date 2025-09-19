@@ -72,3 +72,4 @@ Les logs suivants vous aideront à identifier les problèmes :
 - `src/components/auth/LoginForm.tsx` - Navigation améliorée
 - `src/components/debug/AuthDebug.tsx` - Nouveau composant de débogage
 - `src/app/layout.tsx` - Intégration du composant de débogage
+

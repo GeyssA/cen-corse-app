@@ -17,3 +17,4 @@ NEXT_PUBLIC_EMAILJS_PUBLIC_KEY=votre_public_key
 
 # Configuration pour Vercel
 NEXT_PUBLIC_VERCEL_URL=your-vercel-app.vercel.app
+
