@@ -80,9 +80,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Supabase Auth & API → TOUJOURS réseau, JAMAIS de cache
+  // Supabase Auth & API → TOUJOURS réseau, avec gestion d'erreur
   if (url.hostname.includes('supabase.co') || url.pathname.startsWith('/api/')) {
-    event.respondWith(fetch(request));
+    event.respondWith(handleApiRequest(request));
   }
   // Pages HTML → TOUJOURS réseau, JAMAIS de cache
   else if (request.destination === 'document' || request.destination === 'navigate') {
@@ -103,7 +103,60 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
+// Gestion des requêtes API avec retry et gestion d'erreur
+async function handleApiRequest(request) {
+  const maxRetries = 3;
+  let lastError;
 
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔄 Service Worker: Tentative ${attempt}/${maxRetries} pour ${request.url}`);
+      
+      const response = await fetch(request);
+      
+      if (response.ok) {
+        console.log(`✅ Service Worker: Succès pour ${request.url}`);
+        return response;
+      }
+      
+      // Si erreur HTTP, ne pas retry
+      if (response.status >= 400 && response.status < 500) {
+        console.log(`❌ Service Worker: Erreur client ${response.status} pour ${request.url}`);
+        return response;
+      }
+      
+      throw new Error(`HTTP ${response.status}`);
+      
+    } catch (error) {
+      lastError = error;
+      console.log(`❌ Service Worker: Tentative ${attempt} échouée pour ${request.url}:`, error.message);
+      
+      if (attempt < maxRetries) {
+        // Attendre avant de retry (backoff exponentiel)
+        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        console.log(`⏳ Service Worker: Attente ${delay}ms avant retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  // Toutes les tentatives ont échoué
+  console.error(`❌ Service Worker: Échec définitif après ${maxRetries} tentatives pour ${request.url}`);
+  
+  // Retourner une réponse d'erreur avec timeout
+  return new Response(
+    JSON.stringify({ 
+      error: 'Connexion impossible',
+      message: 'Vérifiez votre connexion internet',
+      retry: true
+    }),
+    {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'application/json' }
+    }
+  );
+}
 
 // Gestion des requêtes statiques avec cache-first
 async function handleStaticRequest(request) {

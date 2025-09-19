@@ -1,4 +1,5 @@
 import { supabase, supabaseAdmin } from './supabase'
+import { getCachedData, setCachedData, isOnline } from './cache'
 
 export interface PollOption {
   id?: string
@@ -37,6 +38,16 @@ export interface Activity {
 // Récupérer toutes les activités
 export async function getActivities(): Promise<Activity[]> {
   try {
+    // Vérifier le cache d'abord
+    const cachedData = getCachedData()
+    if (cachedData) {
+      console.log('📱 Utilisation du cache pour les activités')
+      return cachedData.activities
+    }
+
+    // Si pas de cache, récupérer depuis Supabase
+    console.log('🌐 Récupération des activités depuis Supabase')
+    
     // Récupérer les activités
     const { data: activities, error: activitiesError } = await supabase
       .from('activities')
@@ -45,6 +56,13 @@ export async function getActivities(): Promise<Activity[]> {
 
     if (activitiesError) {
       console.error('Erreur lors de la récupération des activités:', activitiesError)
+      
+      // Si erreur et qu'on a du cache, l'utiliser
+      if (cachedData && !isOnline()) {
+        console.log('🔄 Utilisation du cache en cas d\'erreur réseau')
+        return cachedData.activities
+      }
+      
       return []
     }
 
@@ -102,9 +120,23 @@ export async function getActivities(): Promise<Activity[]> {
       })
     )
 
+    // Mettre en cache si on est en ligne
+    if (isOnline()) {
+      console.log('💾 Mise en cache des activités')
+      setCachedData([], activitiesWithPolls)
+    }
+
     return activitiesWithPolls
   } catch (error) {
     console.error('Erreur inattendue lors de la récupération des activités:', error)
+    
+    // En cas d'erreur, essayer d'utiliser le cache
+    const cachedData = getCachedData()
+    if (cachedData && !isOnline()) {
+      console.log('🔄 Utilisation du cache en cas d\'erreur')
+      return cachedData.activities
+    }
+    
     return []
   }
 }

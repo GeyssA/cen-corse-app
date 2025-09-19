@@ -5,6 +5,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import AuthDebug from "@/components/debug/AuthDebug";
 import PWADebug from "@/components/PWADebug";
+import ConnectionStatus from "@/components/ConnectionStatus";
+import CacheStatus from "@/components/CacheStatus";
 import Script from "next/script";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -65,6 +67,8 @@ export default function RootLayout({
             {children}
             <AuthDebug />
             <PWADebug />
+            <ConnectionStatus />
+            <CacheStatus />
           </ThemeProvider>
         </AuthProvider>
         <Script

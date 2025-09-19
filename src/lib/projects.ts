@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { getCachedData, setCachedData, isOnline } from './cache'
 
 export interface Project {
   id?: string
@@ -425,6 +426,16 @@ export async function updateProjectThematics(projectId: string, thematics: strin
 // Récupérer les projets avec leurs employés et partenaires pour les statistiques
 export async function getProjectsWithDetails(limit = 100, offset = 0): Promise<(Project & { employees: string[], partners: string[], thematics: string[] })[]> {
   try {
+    // Vérifier le cache d'abord
+    const cachedData = getCachedData()
+    if (cachedData && offset === 0) {
+      console.log('📱 Utilisation du cache pour les projets')
+      return cachedData.projects.slice(0, limit) as (Project & { employees: string[], partners: string[], thematics: string[] })[]
+    }
+
+    // Si pas de cache ou pagination, récupérer depuis Supabase
+    console.log('🌐 Récupération des projets depuis Supabase')
+    
     // Récupérer tous les projets
     const { data: projects, error: projectsError } = await supabase
       .from('projects')
@@ -434,6 +445,13 @@ export async function getProjectsWithDetails(limit = 100, offset = 0): Promise<(
 
     if (projectsError) {
       console.error('Erreur lors de la récupération des projets:', projectsError)
+      
+      // Si erreur et qu'on a du cache, l'utiliser
+      if (cachedData && !isOnline()) {
+        console.log('🔄 Utilisation du cache en cas d\'erreur réseau')
+        return cachedData.projects.slice(0, limit) as (Project & { employees: string[], partners: string[], thematics: string[] })[]
+      }
+      
       return []
     }
 
@@ -477,14 +495,30 @@ export async function getProjectsWithDetails(limit = 100, offset = 0): Promise<(
     }
 
     // Combiner les données
-    return projects.map(project => ({
+    const result = projects.map(project => ({
       ...project,
       employees: employees?.filter(e => e.project_id === project.id).map(e => e.employee_name) || [],
       partners: partners?.filter(p => p.project_id === project.id).map(p => p.partner_name) || [],
       thematics: thematics?.filter(t => t.project_id === project.id).map(t => t.thematic_name) || []
     }))
+
+    // Mettre en cache si c'est la première page et qu'on est en ligne
+    if (offset === 0 && isOnline()) {
+      console.log('💾 Mise en cache des projets')
+      setCachedData(result as Project[], [])
+    }
+
+    return result
   } catch (error) {
     console.error('Erreur inattendue lors de la récupération des projets avec détails:', error)
+    
+    // En cas d'erreur, essayer d'utiliser le cache
+    const cachedData = getCachedData()
+    if (cachedData && !isOnline()) {
+      console.log('🔄 Utilisation du cache en cas d\'erreur')
+      return cachedData.projects.slice(0, limit) as (Project & { employees: string[], partners: string[], thematics: string[] })[]
+    }
+    
     return []
   }
 } 
