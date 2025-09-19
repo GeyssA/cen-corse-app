@@ -125,6 +125,21 @@ function CommunauteContent() {
     loadActivities()
   }, [])
 
+  // Écouter la reconnexion pour recharger les données
+  useEffect(() => {
+    const handleConnectionRestored = () => {
+      console.log('🔄 Reconnexion détectée - synchronisation en arrière-plan')
+      // Ne pas forcer un rechargement immédiat, juste marquer qu'on peut synchroniser
+      // Les données restent disponibles depuis le cache
+    }
+
+    window.addEventListener('connectionRestored', handleConnectionRestored)
+    
+    return () => {
+      window.removeEventListener('connectionRestored', handleConnectionRestored)
+    }
+  }, [])
+
   // Précharger les noms des votants pour toutes les options
   const preloadVoterNames = async (activities: Activity[]) => {
     try {

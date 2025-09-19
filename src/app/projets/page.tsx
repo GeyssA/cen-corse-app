@@ -226,6 +226,21 @@ function ProjetsContent() {
     loadProjects()
   }, [page, profile?.role])
 
+  // Écouter la reconnexion pour recharger les données
+  useEffect(() => {
+    const handleConnectionRestored = () => {
+      console.log('🔄 Reconnexion détectée - synchronisation en arrière-plan')
+      // Ne pas forcer un rechargement immédiat, juste marquer qu'on peut synchroniser
+      // Les données restent disponibles depuis le cache
+    }
+
+    window.addEventListener('connectionRestored', handleConnectionRestored)
+    
+    return () => {
+      window.removeEventListener('connectionRestored', handleConnectionRestored)
+    }
+  }, [])
+
   // Bouton pour charger plus de projets
   const handleLoadMore = () => {
     setPage(p => p + 1)

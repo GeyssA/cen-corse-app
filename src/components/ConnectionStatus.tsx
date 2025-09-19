@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { clearCache } from '@/lib/cache'
 
 export default function ConnectionStatus() {
   const [isOnline, setIsOnline] = useState(true)
@@ -8,13 +9,26 @@ export default function ConnectionStatus() {
 
   useEffect(() => {
     const handleOnline = () => {
+      console.log('🔄 Connexion rétablie - rechargement des données')
       setIsOnline(true)
       setShowStatus(true)
+      
+      // Forcer le rechargement des données après reconnexion
+      setTimeout(() => {
+        // NE PAS vider le cache - garder les données disponibles
+        console.log('🔄 Reconnexion détectée - conservation du cache')
+        
+        // Déclencher un événement personnalisé pour notifier les composants
+        window.dispatchEvent(new CustomEvent('connectionRestored'))
+        console.log('📡 Événement de reconnexion envoyé')
+      }, 1000)
+      
       // Masquer le statut après 3 secondes
       setTimeout(() => setShowStatus(false), 3000)
     }
 
     const handleOffline = () => {
+      console.log('📴 Connexion perdue')
       setIsOnline(false)
       setShowStatus(true)
     }

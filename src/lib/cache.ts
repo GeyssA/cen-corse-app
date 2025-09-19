@@ -94,6 +94,15 @@ export function clearCache(): void {
   }
 }
 
+// Vider le cache et forcer le rechargement
+export function clearCacheAndReload(): void {
+  clearCache()
+  // Déclencher un événement pour forcer le rechargement
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('cacheCleared'))
+  }
+}
+
 // Vérifier si on est en ligne
 export function isOnline(): boolean {
   if (typeof window === 'undefined') return true

@@ -7,6 +7,7 @@ import AuthDebug from "@/components/debug/AuthDebug";
 import PWADebug from "@/components/PWADebug";
 import ConnectionStatus from "@/components/ConnectionStatus";
 import CacheStatus from "@/components/CacheStatus";
+import ImagePreloader from "@/components/ImagePreloader";
 import Script from "next/script";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -69,6 +70,7 @@ export default function RootLayout({
             <PWADebug />
             <ConnectionStatus />
             <CacheStatus />
+            <ImagePreloader />
           </ThemeProvider>
         </AuthProvider>
         <Script

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import ProtectedRoute from '@/components/auth/ProtectedRoute'
 import { useTheme } from '@/contexts/ThemeContext'
+import { preloadImages, getImageWithFallback } from '@/lib/imageCache'
 
 // Liste des photos disponibles avec leurs noms
 const PHOTOS = [
@@ -34,6 +35,23 @@ export default function Gallery() {
   const router = useRouter()
   const { theme } = useTheme()
   const [showInfo, setShowInfo] = useState(false)
+  const [imagesLoaded, setImagesLoaded] = useState(false)
+
+  // Précharger les images au montage du composant
+  useEffect(() => {
+    const loadImages = async () => {
+      try {
+        await preloadImages()
+        setImagesLoaded(true)
+        console.log('🖼️ Images de la galerie préchargées')
+      } catch (error) {
+        console.error('❌ Erreur lors du préchargement des images:', error)
+        setImagesLoaded(true) // Continuer même en cas d'erreur
+      }
+    }
+
+    loadImages()
+  }, [])
 
   return (
     <ProtectedRoute>

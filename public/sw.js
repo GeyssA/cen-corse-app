@@ -7,7 +7,11 @@ const STATIC_ASSETS = [
   '/logo_pwa.png',
   '/Logo_CENCorse.png',
   '/manifest.json',
-  '/favicon.ico'
+  '/favicon.ico',
+  '/photos_page_accueil/',
+  '/photos_personnel/',
+  '/Nos fascicules/',
+  '/Logos_soutien/'
 ];
 
 // Installation du service worker
@@ -88,12 +92,15 @@ self.addEventListener('fetch', (event) => {
   else if (request.destination === 'document' || request.destination === 'navigate') {
     event.respondWith(fetch(request));
   }
-  // Ressources statiques seulement → cache first
+  // Images et ressources statiques → cache first avec fallback
   else if (request.method === 'GET' && (
-    request.destination === 'script' || 
-    request.destination === 'style' || 
+    request.destination === 'script' ||
+    request.destination === 'style' ||
     request.destination === 'image' ||
-    request.destination === 'font'
+    request.destination === 'font' ||
+    url.pathname.includes('/photos_') ||
+    url.pathname.includes('/Nos fascicules/') ||
+    url.pathname.includes('/Logos_soutien/')
   )) {
     event.respondWith(handleStaticRequest(request));
   }
@@ -162,18 +169,33 @@ async function handleApiRequest(request) {
 async function handleStaticRequest(request) {
   const cachedResponse = await caches.match(request);
   if (cachedResponse) {
+    console.log('📱 Service Worker: Ressource servie depuis le cache:', request.url);
     return cachedResponse;
   }
+  
   try {
+    console.log('🌐 Service Worker: Récupération depuis le réseau:', request.url);
     const networkResponse = await fetch(request);
-    // Ne mettre en cache que les requêtes http(s)
+    
+    // Ne mettre en cache que les requêtes http(s) et les réponses OK
     if (networkResponse.ok && request.url.startsWith('http')) {
       const cache = await caches.open(DYNAMIC_CACHE);
       cache.put(request, networkResponse.clone());
+      console.log('💾 Service Worker: Ressource mise en cache:', request.url);
     }
+    
     return networkResponse;
   } catch (error) {
     console.error('❌ Service Worker: Erreur lors de la récupération:', error);
+    
+    // Pour les images, retourner une image placeholder si pas de cache
+    if (request.destination === 'image') {
+      return new Response('', { 
+        status: 404,
+        statusText: 'Image non disponible hors ligne'
+      });
+    }
+    
     // Retourner une page d'erreur hors ligne
     if (request.destination === 'document') {
       return caches.match('/');
