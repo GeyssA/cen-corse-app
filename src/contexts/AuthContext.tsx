@@ -21,66 +21,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Récupérer la session initiale
+    // Récupérer la session initiale - VERSION SIMPLE
     const getInitialSession = async () => {
       try {
-        console.log('🔍 Vérification de la session initiale...')
+        console.log('🔍 Vérification de la session...')
         
-        // Vérifier d'abord le localStorage pour une session récente
-        const lastSessionTime = localStorage.getItem('lastSessionTime')
-        const now = Date.now()
-        const fiveMinutes = 5 * 60 * 1000 // 5 minutes en millisecondes
+        // TIMEOUT de 3 secondes maximum
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 3000)
+        )
         
-        if (lastSessionTime && (now - parseInt(lastSessionTime)) < fiveMinutes) {
-          console.log('✅ Session récente trouvée dans le cache local')
-          // Session récente, on peut continuer sans vérifier Supabase
-          setUser({ id: 'cached-user' } as any) // User factice pour débloquer
-          setLoading(false)
-          return
-        }
+        const sessionPromise = supabase.auth.getSession()
         
-        const { data: { session }, error } = await supabase.auth.getSession()
+        const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]) as any
         
-        if (error) {
-          console.error('❌ Erreur lors de la récupération de la session:', error)
-          if (error.message.includes('Invalid Refresh Token')) {
-            console.log('🔄 Token invalide, déconnexion...')
-            await supabase.auth.signOut()
-          }
-          setLoading(false)
-          return
-        }
-        
-        console.log('✅ Session récupérée:', !!session)
-        setUser(session?.user ?? null)
-        
-        if (session?.user) {
-          console.log('👤 Récupération du profil utilisateur...')
-          const userProfile = await getProfile(session.user.id)
-          setProfile(userProfile)
-          console.log('✅ Profil récupéré:', !!userProfile)
-          
-          // Sauvegarder le timestamp de la session
-          localStorage.setItem('lastSessionTime', now.toString())
-        } else {
-          // Pas de session - vérifier si on est sur une page protégée
-          console.log('❌ Aucune session trouvée')
+        if (error || !session) {
+          console.log('❌ Pas de session - redirection vers /auth')
           if (typeof window !== 'undefined') {
             const currentPath = window.location.pathname
             const protectedPaths = ['/projets', '/communaute', '/statistiques', '/gallery', '/presentation', '/signalement', '/supports']
             
             if (protectedPaths.some(path => currentPath.startsWith(path))) {
-              console.log('🔄 Redirection vers la page d\'authentification...')
               window.location.href = '/auth'
               return
             }
           }
+          setLoading(false)
+          return
+        }
+        
+        console.log('✅ Session trouvée')
+        setUser(session.user)
+        
+        // Récupérer le profil rapidement
+        try {
+          const userProfile = await getProfile(session.user.id)
+          setProfile(userProfile)
+        } catch (profileError) {
+          console.log('⚠️ Erreur profil, mais on continue')
         }
         
         setLoading(false)
       } catch (error) {
-        console.error('❌ Erreur dans getInitialSession:', error)
-        setLoading(false)
+        console.log('❌ Erreur session - redirection vers /auth')
+        if (typeof window !== 'undefined') {
+          window.location.href = '/auth'
+        }
       }
     }
 

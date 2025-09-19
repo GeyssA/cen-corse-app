@@ -3,11 +3,6 @@ import { IBM_Plex_Sans, Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
-import AuthDebug from "@/components/debug/AuthDebug";
-import PWADebug from "@/components/PWADebug";
-import ConnectionStatus from "@/components/ConnectionStatus";
-import CacheStatus from "@/components/CacheStatus";
-import ImagePreloader from "@/components/ImagePreloader";
 import SessionGuard from "@/components/SessionGuard";
 import Script from "next/script";
 
@@ -69,11 +64,6 @@ export default function RootLayout({
             <SessionGuard>
               {children}
             </SessionGuard>
-            <AuthDebug />
-            <PWADebug />
-            <ConnectionStatus />
-            <CacheStatus />
-            <ImagePreloader />
           </ThemeProvider>
         </AuthProvider>
         <Script
