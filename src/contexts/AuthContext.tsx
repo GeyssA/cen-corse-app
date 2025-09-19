@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { getProfile, Profile, AuthState } from '@/lib/auth'
+import { cacheProfile, getCachedProfile, clearProfileCache } from '@/lib/profile-cache'
 
 interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<{ error: unknown }>
@@ -35,6 +36,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('✅ Session récente dans le cache - utilisation directe')
           // Session récente, on peut continuer sans vérifier Supabase
           setUser({ id: 'cached-user' } as any) // User factice pour débloquer
+          
+          // Récupérer le profil depuis le cache
+          const cachedProfile = getCachedProfile()
+          if (cachedProfile) {
+            console.log('✅ Profil récupéré depuis le cache:', cachedProfile.role)
+            setProfile(cachedProfile)
+          }
+          
           setLoading(false)
           return
         }
@@ -73,8 +82,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Récupérer le profil en arrière-plan
         getProfile(session.user.id).then(userProfile => {
           setProfile(userProfile)
+          // Mettre en cache le profil
+          if (userProfile) {
+            cacheProfile(userProfile)
+          }
         }).catch(() => {
-          console.log('⚠️ Erreur profil, mais on continue')
+          console.log('⚠️ Erreur profil, essayer le cache')
+          // En cas d'erreur, essayer le cache
+          const cachedProfile = getCachedProfile()
+          if (cachedProfile) {
+            setProfile(cachedProfile)
+          }
         })
         
         setLoading(false)
@@ -89,6 +107,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (lastSessionTime && (now - parseInt(lastSessionTime)) < fiveMinutes) {
           console.log('✅ Utilisation du cache en cas d\'erreur')
           setUser({ id: 'cached-user' } as any)
+          
+          // Récupérer le profil depuis le cache
+          const cachedProfile = getCachedProfile()
+          if (cachedProfile) {
+            setProfile(cachedProfile)
+          }
+          
           setLoading(false)
           return
         }
@@ -114,17 +139,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('🔄 Changement d\'état d\'authentification:', event)
         setUser((session as any)?.user ?? null)
         
-        if ((session as any)?.user) {
-          console.log('👤 Récupération du profil après changement d\'état...')
-          const userProfile = await getProfile((session as any).user.id)
-          setProfile(userProfile)
-          console.log('✅ Profil mis à jour:', !!userProfile)
-          
-          // Mettre à jour le timestamp de session
-          localStorage.setItem('lastSessionTime', Date.now().toString())
-        } else {
-          setProfile(null)
-        }
+            if ((session as any)?.user) {
+              console.log('👤 Récupération du profil après changement d\'état...')
+              const userProfile = await getProfile((session as any).user.id)
+              setProfile(userProfile)
+              console.log('✅ Profil mis à jour:', !!userProfile)
+              
+              // Mettre en cache le profil
+              if (userProfile) {
+                cacheProfile(userProfile)
+              }
+              
+              // Mettre à jour le timestamp de session
+              localStorage.setItem('lastSessionTime', Date.now().toString())
+            } else {
+              setProfile(null)
+              clearProfileCache()
+            }
         
         setLoading(false)
       }
@@ -172,6 +203,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
+    clearProfileCache(); // Vider le cache du profil
   }
 
   const updateUserProfile = async () => {
@@ -208,6 +240,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut()
     setUser(null)
     setProfile(null)
+    clearProfileCache() // Vider le cache du profil
   }
 
   const value = {
