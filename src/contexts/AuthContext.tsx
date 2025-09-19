@@ -25,7 +25,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const getInitialSession = async () => {
       try {
         console.log('🔍 Vérification de la session initiale...')
+        
+        // TIMEOUT de sécurité - si ça prend plus de 10 secondes, on force la redirection
+        const timeoutId = setTimeout(() => {
+          console.log('⏰ TIMEOUT - Redirection forcée vers /auth')
+          if (typeof window !== 'undefined') {
+            window.location.href = '/auth'
+          }
+        }, 10000)
+        
         const { data: { session }, error } = await supabase.auth.getSession()
+        
+        clearTimeout(timeoutId)
         
         if (error) {
           console.error('❌ Erreur lors de la récupération de la session:', error)

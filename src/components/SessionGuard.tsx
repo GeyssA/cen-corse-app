@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
+import SmartLoading from './SmartLoading'
 
 interface SessionGuardProps {
   children: React.ReactNode
@@ -28,13 +29,9 @@ export default function SessionGuard({ children }: SessionGuardProps) {
     }
   }, [user, loading, router])
 
-  // Si on charge, ne rien afficher
+  // Si on charge, afficher le composant de chargement intelligent
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    )
+    return <SmartLoading message="Vérification de votre session..." />
   }
 
   // Si pas d'utilisateur et qu'on est sur une page protégée, ne rien afficher
@@ -43,14 +40,7 @@ export default function SessionGuard({ children }: SessionGuardProps) {
     const protectedPaths = ['/projets', '/communaute', '/statistiques', '/gallery', '/presentation', '/signalement', '/supports']
     
     if (protectedPaths.some(path => currentPath.startsWith(path))) {
-      return (
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Redirection vers la page d'authentification...</p>
-          </div>
-        </div>
-      )
+      return <SmartLoading message="Redirection vers la page d'authentification..." />
     }
   }
 

@@ -98,6 +98,12 @@ export default function CacheStatus() {
               >
                 Réinitialiser l'app
               </button>
+              <button
+                onClick={() => window.location.href = '/auth'}
+                className="block text-xs text-green-600 hover:text-green-800 underline font-bold"
+              >
+                🚨 URGENCE: Aller à /auth
+              </button>
             </div>
           </div>
         ) : (
