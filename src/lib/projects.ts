@@ -425,14 +425,14 @@ export async function updateProjectThematics(projectId: string, thematics: strin
 
 // Récupérer les projets avec leurs employés et partenaires pour les statistiques
 export async function getProjectsWithDetails(limit = 100, offset = 0): Promise<(Project & { employees: string[], partners: string[], thematics: string[] })[]> {
-  try {
-    // Vérifier le cache d'abord
-    const cachedData = getCachedData()
-    if (cachedData && offset === 0) {
-      console.log('📱 Utilisation du cache pour les projets')
-      return cachedData.projects.slice(0, limit) as (Project & { employees: string[], partners: string[], thematics: string[] })[]
-    }
+  // Vérifier le cache d'abord
+  const cachedData = getCachedData()
+  if (cachedData && offset === 0) {
+    console.log('📱 Utilisation du cache pour les projets')
+    return cachedData.projects.slice(0, limit) as (Project & { employees: string[], partners: string[], thematics: string[] })[]
+  }
 
+  try {
     // Si pas de cache ou pagination, récupérer depuis Supabase
     console.log('🌐 Récupération des projets depuis Supabase')
     
@@ -447,9 +447,10 @@ export async function getProjectsWithDetails(limit = 100, offset = 0): Promise<(
       console.error('Erreur lors de la récupération des projets:', projectsError)
       
       // Si erreur et qu'on a du cache, l'utiliser
-      if (cachedData && !isOnline()) {
+      const fallbackCache = getCachedData()
+      if (fallbackCache && !isOnline()) {
         console.log('🔄 Utilisation du cache en cas d\'erreur réseau')
-        return cachedData.projects.slice(0, limit) as (Project & { employees: string[], partners: string[], thematics: string[] })[]
+        return fallbackCache.projects.slice(0, limit) as (Project & { employees: string[], partners: string[], thematics: string[] })[]
       }
       
       return []

@@ -37,14 +37,14 @@ export interface Activity {
 
 // Récupérer toutes les activités
 export async function getActivities(): Promise<Activity[]> {
-  try {
-    // Vérifier le cache d'abord
-    const cachedData = getCachedData()
-    if (cachedData) {
-      console.log('📱 Utilisation du cache pour les activités')
-      return cachedData.activities
-    }
+  // Vérifier le cache d'abord
+  const cachedData = getCachedData()
+  if (cachedData) {
+    console.log('📱 Utilisation du cache pour les activités')
+    return cachedData.activities
+  }
 
+  try {
     // Si pas de cache, récupérer depuis Supabase
     console.log('🌐 Récupération des activités depuis Supabase')
     
@@ -58,9 +58,10 @@ export async function getActivities(): Promise<Activity[]> {
       console.error('Erreur lors de la récupération des activités:', activitiesError)
       
       // Si erreur et qu'on a du cache, l'utiliser
-      if (cachedData && !isOnline()) {
+      const fallbackCache = getCachedData()
+      if (fallbackCache && !isOnline()) {
         console.log('🔄 Utilisation du cache en cas d\'erreur réseau')
-        return cachedData.activities
+        return fallbackCache.activities
       }
       
       return []
