@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { getCachedData, setCachedData, isOnline } from './cache'
+import { robustSupabaseQuery, robustQueryWithCache } from './supabase-robust'
 
 export interface Project {
   id?: string
@@ -42,23 +43,23 @@ export interface ProjectThematic {
 
 // Récupérer tous les projets avec pagination
 export async function getProjects(limit = 10, offset = 0): Promise<Project[]> {
-  try {
-    const { data, error } = await supabase
-      .from('projects')
-      .select('id, title, description, status, progress, start_date, end_date, thematic, pole, created_at')
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
-
-    if (error) {
-      console.error('Erreur lors de la récupération des projets:', error)
-      return []
+  const result = await robustSupabaseQuery(
+    async () => {
+      const queryResult = await supabase
+        .from('projects')
+        .select('id, title, description, status, progress, start_date, end_date, thematic, pole, created_at')
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1)
+      return queryResult
     }
+  )
 
-    return data || []
-  } catch (error) {
-    console.error('Erreur inattendue lors de la récupération des projets:', error)
+  if (result.error) {
+    console.error('Erreur lors de la récupération des projets:', result.error)
     return []
   }
+
+  return result.data || []
 }
 
 // Récupérer un projet par ID avec ses employés et partenaires
@@ -436,19 +437,24 @@ export async function getProjectsWithDetails(limit = 100, offset = 0): Promise<(
     // Si pas de cache ou pagination, récupérer depuis Supabase
     console.log('🌐 Récupération des projets depuis Supabase')
     
-    // Récupérer tous les projets
-    const { data: projects, error: projectsError } = await supabase
+    // Récupérer tous les projets avec retry
+    const projectsResult = await robustSupabaseQuery(
+      async () => {
+        const result = await supabase
       .from('projects')
       .select('*')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
+        return result
+      }
+    )
 
-    if (projectsError) {
-      console.error('Erreur lors de la récupération des projets:', projectsError)
+    if (projectsResult.error || !projectsResult.data) {
+      console.error('Erreur lors de la récupération des projets:', projectsResult.error)
       
       // Si erreur et qu'on a du cache, l'utiliser
       const fallbackCache = getCachedData()
-      if (fallbackCache && !isOnline()) {
+      if (fallbackCache) {
         console.log('🔄 Utilisation du cache en cas d\'erreur réseau')
         return fallbackCache.projects.slice(0, limit) as (Project & { employees: string[], partners: string[], thematics: string[] })[]
       }
@@ -456,55 +462,55 @@ export async function getProjectsWithDetails(limit = 100, offset = 0): Promise<(
       return []
     }
 
+    const projects = projectsResult.data
+
     if (!projects || projects.length === 0) {
       return []
     }
 
-    // Récupérer les employés pour tous les projets
-    const { data: employees, error: employeesError } = await supabase
+    // Récupérer les employés avec retry
+    const employeesResult = await robustSupabaseQuery(
+      async () => {
+        const result = await supabase
       .from('project_employees')
       .select('project_id, employee_name')
       .in('project_id', projects.map(p => p.id))
+        return result
+      }
+    )
 
-    if (employeesError) {
-      console.error('Erreur lors de la récupération des employés:', employeesError)
-    }
-
-    // Récupérer les partenaires pour tous les projets
-    const { data: partners, error: partnersError } = await supabase
+    // Récupérer les partenaires avec retry
+    const partnersResult = await robustSupabaseQuery(
+      async () => {
+        const result = await supabase
       .from('project_partners')
       .select('project_id, partner_name')
       .in('project_id', projects.map(p => p.id))
+        return result
+      }
+    )
 
-    if (partnersError) {
-      console.error('Erreur lors de la récupération des partenaires:', partnersError)
-    }
-
-    // Récupérer les thématiques pour tous les projets
-    const { data: thematics, error: thematicsError } = await supabase
+    // Récupérer les thématiques avec retry
+    const thematicsResult = await robustSupabaseQuery(
+      async () => {
+        const result = await supabase
       .from('project_thematics')
       .select('project_id, thematic_name')
       .in('project_id', projects.map(p => p.id))
+        return result
+      }
+    )
 
-    if (thematicsError) {
-      console.error('❌ Erreur lors de la récupération des thématiques:', thematicsError)
-      console.error('❌ Code d\'erreur:', thematicsError.code)
-      console.error('❌ Message d\'erreur:', thematicsError.message)
-      console.error('❌ Détails:', thematicsError.details)
-    } else {
-      console.log('✅ Thématiques récupérées avec succès:', thematics?.length || 0, 'thématiques trouvées')
-    }
-
-    // Combiner les données
+    // Combiner les données (même si certaines requêtes ont échoué)
     const result = projects.map(project => ({
       ...project,
-      employees: employees?.filter(e => e.project_id === project.id).map(e => e.employee_name) || [],
-      partners: partners?.filter(p => p.project_id === project.id).map(p => p.partner_name) || [],
-      thematics: thematics?.filter(t => t.project_id === project.id).map(t => t.thematic_name) || []
+      employees: employeesResult.data?.filter(e => e.project_id === project.id).map(e => e.employee_name) || [],
+      partners: partnersResult.data?.filter(p => p.project_id === project.id).map(p => p.partner_name) || [],
+      thematics: thematicsResult.data?.filter(t => t.project_id === project.id).map(t => t.thematic_name) || []
     }))
 
-    // Mettre en cache si c'est la première page et qu'on est en ligne
-    if (offset === 0 && isOnline()) {
+    // Mettre en cache si c'est la première page
+    if (offset === 0) {
       console.log('💾 Mise en cache des projets')
       setCachedData(result as Project[], [])
     }
@@ -515,7 +521,7 @@ export async function getProjectsWithDetails(limit = 100, offset = 0): Promise<(
     
     // En cas d'erreur, essayer d'utiliser le cache
     const cachedData = getCachedData()
-    if (cachedData && !isOnline()) {
+    if (cachedData) {
       console.log('🔄 Utilisation du cache en cas d\'erreur')
       return cachedData.projects.slice(0, limit) as (Project & { employees: string[], partners: string[], thematics: string[] })[]
     }

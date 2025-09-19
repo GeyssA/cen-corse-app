@@ -1,5 +1,6 @@
 import { supabase, supabaseAdmin } from './supabase'
 import { getCachedData, setCachedData, isOnline } from './cache'
+import { robustSupabaseQuery } from './supabase-robust'
 
 export interface PollOption {
   id?: string
@@ -48,18 +49,23 @@ export async function getActivities(): Promise<Activity[]> {
     // Si pas de cache, récupérer depuis Supabase
     console.log('🌐 Récupération des activités depuis Supabase')
     
-    // Récupérer les activités
-    const { data: activities, error: activitiesError } = await supabase
-      .from('activities')
-      .select('*')
-      .order('created_at', { ascending: false })
+        // Récupérer les activités avec retry
+        const activitiesResult = await robustSupabaseQuery(
+          async () => {
+            const result = await supabase
+              .from('activities')
+              .select('*')
+              .order('created_at', { ascending: false })
+            return result
+          }
+        )
 
-    if (activitiesError) {
-      console.error('Erreur lors de la récupération des activités:', activitiesError)
+    if (activitiesResult.error || !activitiesResult.data) {
+      console.error('Erreur lors de la récupération des activités:', activitiesResult.error)
       
       // Si erreur et qu'on a du cache, l'utiliser
       const fallbackCache = getCachedData()
-      if (fallbackCache && !isOnline()) {
+      if (fallbackCache) {
         console.log('🔄 Utilisation du cache en cas d\'erreur réseau')
         return fallbackCache.activities
       }
@@ -67,6 +73,7 @@ export async function getActivities(): Promise<Activity[]> {
       return []
     }
 
+    const activities = activitiesResult.data
     if (!activities || activities.length === 0) {
       return []
     }
