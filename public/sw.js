@@ -70,143 +70,30 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Stratégie pour les requêtes API Supabase
+  // Supabase Auth & API → TOUJOURS réseau, JAMAIS de cache
   if (url.hostname.includes('supabase.co') || url.pathname.startsWith('/api/')) {
-    event.respondWith(handleApiRequest(request));
+    event.respondWith(fetch(request));
   }
-  // Stratégie pour les pages HTML - TOUJOURS réseau, JAMAIS de cache
+  // Pages HTML → TOUJOURS réseau, JAMAIS de cache
   else if (request.destination === 'document' || request.destination === 'navigate') {
-    event.respondWith(handlePageRequest(request));
+    event.respondWith(fetch(request));
   }
-  // Stratégie pour les ressources statiques
-  else if (request.method === 'GET') {
+  // Ressources statiques seulement → cache first
+  else if (request.method === 'GET' && (
+    request.destination === 'script' || 
+    request.destination === 'style' || 
+    request.destination === 'image' ||
+    request.destination === 'font'
+  )) {
     event.respondWith(handleStaticRequest(request));
   }
-  // Stratégie pour les autres requêtes
+  // Toutes les autres requêtes → réseau direct
   else {
     event.respondWith(fetch(request));
   }
 });
 
-// Gestion des requêtes de pages - réseau d'abord, puis cache
-async function handlePageRequest(request) {
-  // Détecter si c'est un refresh (F5, Ctrl+R, ou refresh mobile)
-  const isRefresh = request.headers.get('cache-control') === 'no-cache' || 
-                   request.headers.get('pragma') === 'no-cache' ||
-                   request.url.includes('_refresh=') ||
-                   request.headers.get('sec-fetch-mode') === 'navigate';
-  
-  if (isRefresh) {
-    console.log('🔄 Service Worker: Refresh détecté, vidage complet du cache');
-    
-    // Vider TOUS les caches
-    const cacheNames = await caches.keys();
-    await Promise.all(
-      cacheNames.map(cacheName => caches.delete(cacheName))
-    );
-    
-    // Vider le localStorage et sessionStorage
-    try {
-      const clients = await self.clients.matchAll();
-      clients.forEach(client => {
-        client.postMessage({ 
-          type: 'CLEAR_STORAGE',
-          action: 'clearAll'
-        });
-      });
-    } catch (error) {
-      console.log('Erreur lors du vidage du storage:', error);
-    }
-  }
 
-  // Pour les pages HTML, toujours vider le cache et forcer le réseau
-  if (request.destination === 'document' || request.destination === 'navigate') {
-    console.log('🔄 Service Worker: Page HTML détectée, vidage du cache pour:', request.url);
-    
-    // Vider le cache pour cette page
-    const cache = await caches.open(DYNAMIC_CACHE);
-    await cache.delete(request);
-    
-    // Vider aussi le cache statique si c'est la page d'accueil
-    if (request.url.endsWith('/') || request.url.includes('index')) {
-      await cache.delete('/');
-    }
-  }
-
-  try {
-    // Essayer d'abord la requête réseau avec no-cache pour les pages
-    const networkRequest = new Request(request, {
-      cache: 'no-cache',
-      headers: {
-        ...request.headers,
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
-    });
-    
-    const networkResponse = await fetch(networkRequest);
-    
-    if (networkResponse.ok) {
-      // Ne pas mettre en cache les pages HTML pour éviter les problèmes
-      if (request.destination !== 'document' && request.destination !== 'navigate') {
-        const cache = await caches.open(DYNAMIC_CACHE);
-        cache.put(request, networkResponse.clone());
-      }
-    }
-    
-    return networkResponse;
-  } catch (error) {
-    console.log('📡 Service Worker: Hors ligne, utilisation du cache pour:', request.url);
-    
-    // En cas d'échec réseau, essayer le cache
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    
-    // Si pas en cache, retourner une page d'erreur hors ligne
-    return caches.match('/');
-  }
-}
-
-// Gestion des requêtes API avec synchronisation hors ligne
-async function handleApiRequest(request) {
-  try {
-    // Essayer d'abord la requête réseau
-    const networkResponse = await fetch(request);
-    // Ne mettre en cache que les requêtes GET et http(s)
-    if (
-      networkResponse.ok &&
-      request.method === 'GET' &&
-      request.url.startsWith('http')
-    ) {
-      const cache = await caches.open(DYNAMIC_CACHE);
-      cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
-  } catch (error) {
-    console.log('📡 Service Worker: Hors ligne, utilisation du cache pour:', request.url);
-    // En cas d'échec réseau, essayer le cache (seulement pour GET)
-    if (request.method === 'GET' && request.url.startsWith('http')) {
-      const cachedResponse = await caches.match(request);
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-    }
-    // Si pas en cache ou méthode non supportée, retourner une réponse d'erreur
-    return new Response(
-      JSON.stringify({ 
-        error: 'Hors ligne - Impossible de récupérer les données',
-        offline: true 
-      }),
-      {
-        status: 503,
-        statusText: 'Service Unavailable',
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-  }
-}
 
 // Gestion des requêtes statiques avec cache-first
 async function handleStaticRequest(request) {
