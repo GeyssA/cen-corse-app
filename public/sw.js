@@ -15,30 +15,19 @@ self.addEventListener('install', (event) => {
   console.log('🔄 Service Worker: Installation en cours...');
   
   event.waitUntil(
-    // Vider tous les anciens caches d'abord
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          console.log('🗑️ Service Worker: Suppression de l\'ancien cache:', cacheName);
-          return caches.delete(cacheName);
-        })
-      );
-    })
-    .then(() => {
-      // Créer le nouveau cache statique
-      return caches.open(STATIC_CACHE);
-    })
-    .then((cache) => {
-      console.log('✅ Service Worker: Cache statique créé');
-      return cache.addAll(STATIC_ASSETS);
-    })
-    .then(() => {
-      console.log('✅ Service Worker: Installation terminée');
-      return self.skipWaiting();
-    })
-    .catch((error) => {
-      console.error('❌ Service Worker: Erreur lors de l\'installation:', error);
-    })
+    // Créer le cache statique sans vider les anciens (pour éviter les problèmes PWA)
+    caches.open(STATIC_CACHE)
+      .then((cache) => {
+        console.log('✅ Service Worker: Cache statique créé');
+        return cache.addAll(STATIC_ASSETS);
+      })
+      .then(() => {
+        console.log('✅ Service Worker: Installation terminée');
+        return self.skipWaiting();
+      })
+      .catch((error) => {
+        console.error('❌ Service Worker: Erreur lors de l\'installation:', error);
+      })
   );
 });
 
@@ -70,12 +59,20 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
+  // Pour les PWA installées, être plus permissif au démarrage
+  const isInitialLoad = request.destination === 'document' && 
+                       (url.pathname === '/' || url.pathname === '/auth');
+
   // Supabase Auth & API → TOUJOURS réseau, JAMAIS de cache
   if (url.hostname.includes('supabase.co') || url.pathname.startsWith('/api/')) {
     event.respondWith(fetch(request));
   }
   // Pages HTML → TOUJOURS réseau, JAMAIS de cache
   else if (request.destination === 'document' || request.destination === 'navigate') {
+    // Pour le chargement initial, être encore plus permissif
+    if (isInitialLoad) {
+      console.log('🚀 Service Worker: Chargement initial PWA détecté, passage direct au réseau');
+    }
     event.respondWith(fetch(request));
   }
   // Ressources statiques seulement → cache first
