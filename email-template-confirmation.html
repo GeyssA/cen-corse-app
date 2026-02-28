@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmation de compte - Le journal du CEN Corse</title>
+    <style>
+        /* Reset et styles de base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #1a1a1a;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 50%, #90caf9 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+        }
+        
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .title {
+            color: #1e3a8a;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            margin-bottom: 8px;
+        }
+        
+        .subtitle {
+            color: #6b7280;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        /* Contenu principal */
+        .content {
+            margin-bottom: 40px;
+        }
+        
+        .welcome-text {
+            font-size: 20px;
+            color: #1e3a8a;
+            font-weight: 600;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .confirmation-text {
+            font-size: 16px;
+            color: #374151;
+            margin-bottom: 20px;
+            line-height: 1.7;
+        }
+        
+        .info-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 24px 0;
+        }
+        
+        .info-box .info-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1e3a8a;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .info-box .info-text {
+            font-size: 14px;
+            color: #4b5563;
+            line-height: 1.6;
+        }
+        
+        /* Bouton de confirmation - NOUVEAU DESIGN */
+        .button-container {
+            text-align: center;
+            margin: 40px 0;
+        }
+        
+        .confirm-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: #ffffff !important;
+            padding: 18px 36px;
+            text-decoration: none;
+            border-radius: 16px;
+            font-weight: 700;
+            font-size: 17px;
+            letter-spacing: 0.025em;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+            border: none;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            -webkit-text-fill-color: #ffffff;
+            text-fill-color: #ffffff;
+            text-transform: uppercase;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        .confirm-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .confirm-button:hover {
+            background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 35px rgba(59, 130, 246, 0.4);
+        }
+        
+        .confirm-button:hover::before {
+            left: 100%;
+        }
+        
+        .confirm-button:active {
+            transform: translateY(0);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
+        }
+        
+        /* Icône dans le bouton */
+        .confirm-button .icon {
+            margin-right: 8px;
+            font-size: 18px;
+        }
+        
+        /* Étapes après confirmation */
+        .steps-container {
+            margin: 30px 0;
+        }
+        
+        .steps-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e3a8a;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            padding: 16px;
+            background: #f8fafc;
+            border-radius: 12px;
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .step-number {
+            background: #3b82f6;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        
+        .step-text {
+            font-size: 14px;
+            color: #4b5563;
+            line-height: 1.5;
+        }
+        
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .signature {
+            font-style: italic;
+            color: #6b7280;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        .signature .team {
+            color: #3b82f6;
+            font-weight: 600;
+        }
+        
+        .support-text {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 16px;
+            line-height: 1.4;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+                background: #f8f9fa;
+            }
+            
+            .container {
+                padding: 30px 20px;
+                border-radius: 16px;
+                background: #ffffff;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+                border: 1px solid #e5e7eb;
+            }
+            
+            .title {
+                font-size: 24px;
+            }
+            
+            .welcome-text {
+                font-size: 18px;
+            }
+            
+            .confirmation-text {
+                font-size: 15px;
+            }
+            
+            .confirm-button {
+                padding: 16px 32px;
+                font-size: 16px;
+                width: 100%;
+                max-width: 320px;
+                color: #ffffff !important;
+                -webkit-text-fill-color: #ffffff;
+                text-fill-color: #ffffff;
+                border-radius: 14px;
+            }
+            
+            .step {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .step-number {
+                margin: 0 auto 8px;
+            }
+        }
+        
+        /* Styles pour les clients email qui ne supportent pas les gradients */
+        .fallback-title {
+            color: #1e3a8a;
+        }
+        
+        .fallback-button {
+            background-color: #3b82f6;
+            color: #ffffff !important;
+        }
+        
+        .fallback-button:hover {
+            background-color: #2563eb;
+        }
+        
+        /* Protection contre la correction automatique */
+        .corsican-text {
+            -webkit-user-modify: read-only;
+            -moz-user-modify: read-only;
+            user-modify: read-only;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title fallback-title">Le journal du CEN Corse</div>
+            <div class="subtitle">Confirmation de votre compte</div>
+        </div>
+        
+        <div class="content">
+            <div class="welcome-text">
+                Bonghjornu, Bonjour ! 👋
+            </div>
+            
+            <div class="confirmation-text">
+                Bienvenue dans le journal du CEN Corse ! Nous sommes ravis de vous accueillir dans notre communauté.
+            </div>
+            
+            <div class="confirmation-text">
+                Pour activer votre compte et commencer à explorer nos projets, veuillez cliquer sur le bouton de confirmation ci-dessous :
+            </div>
+            
+            <div class="info-box">
+                <div class="info-title">
+                    📧 Que se passe-t-il après la confirmation ?
+                </div>
+                <div class="info-text">
+                    Une fois votre compte confirmé, vous pourrez vous connecter à l'application et accéder à tous nos contenus : projets, ressources, communauté et bien plus encore !
+                </div>
+            </div>
+        </div>
+        
+        <div class="button-container">
+            <a href="{{ .ConfirmationURL }}" class="confirm-button fallback-button">
+                <span class="icon">✨</span>
+                Confirmer mon compte
+            </a>
+        </div>
+        
+        <div class="steps-container">
+            <div class="steps-title">
+                🚀 Étapes après confirmation
+            </div>
+            
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-text">
+                    <strong>Confirmation automatique</strong><br>
+                    Votre compte sera automatiquement activé
+                </div>
+            </div>
+            
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-text">
+                    <strong>Message de succès</strong><br>
+                    Vous verrez un message confirmant l'activation
+                </div>
+            </div>
+            
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-text">
+                    <strong>Retour à l'application</strong><br>
+                    Vous pouvez retourner sur l'application et vous connecter
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <div class="signature">
+                <span class="corsican-text" spellcheck="false" lang="co">A prestu !</span><br>
+                <span class="team">L'équipe du journal du CEN Corse</span>
+            </div>
+            
+            <div class="support-text">
+                Si vous rencontrez des difficultés, n'hésitez pas à nous contacter.<br>
+                Ce lien de confirmation expire dans 24 heures.
+            </div>
+        </div>
+    </div>
+</body>
+</html>

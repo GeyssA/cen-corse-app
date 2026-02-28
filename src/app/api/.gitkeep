@@ -1,0 +1,11 @@
+# Routes API exclues du build Capacitor
+# Les appels API utilisent maintenant Supabase directement côté client
+
+
+
+
+
+
+
+
+

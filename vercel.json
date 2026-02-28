@@ -1,0 +1,21 @@
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Vercel-Debug",
+          "value": "false"
+        },
+        {
+          "key": "X-Vercel-Speed-Insights",
+          "value": "false"
+        },
+        {
+          "key": "X-Vercel-Analytics",
+          "value": "false"
+        }
+      ]
+    }
+  ]
+}

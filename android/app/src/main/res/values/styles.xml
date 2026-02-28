@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <!-- Customize your theme here. -->
+        <item name="colorPrimary">#1e3a8a</item>
+        <item name="colorPrimaryDark">#1e3a8a</item>
+        <item name="colorAccent">#1e3a8a</item>
+        <!-- Forcer la barre de statut en bleu marine -->
+        <item name="android:statusBarColor">#1e3a8a</item>
+        <item name="android:navigationBarColor">#1e3a8a</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowBackground">@null</item>
+        <item name="android:statusBarColor">#1e3a8a</item>
+        <item name="android:navigationBarColor">#1e3a8a</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+
+    <!-- Thème personnalisé SANS Theme.SplashScreen pour éviter les couleurs grises par défaut -->
+    <style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar">
+        <item name="android:background">@drawable/splash</item>
+        <!-- FORCER les couleurs - ces valeurs ÉCRASENT tout -->
+        <item name="android:statusBarColor">#1e3a8a</item>
+        <item name="android:navigationBarColor">#1e3a8a</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+    </style>
+</resources>

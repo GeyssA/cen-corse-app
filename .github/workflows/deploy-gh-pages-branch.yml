@@ -1,0 +1,33 @@
+# Déploie validation-web vers la branche gh-pages.
+# Réglage : Settings > Pages > Source = "Deploy from a branch" > Branch = gh-pages, / (root).
+# Secrets : SUPABASE_URL, SUPABASE_ANON_KEY (Settings > Secrets and variables > Actions).
+
+name: Deploy validation-web to gh-pages branch
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare and inject config
+        run: |
+          mkdir -p .public
+          cp validation-web/index.html validation-web/style.css validation-web/app.js .public/
+          echo "window.SUPABASE_URL = '${{ secrets.SUPABASE_URL }}';" > .public/config.js
+          echo "window.SUPABASE_ANON_KEY = '${{ secrets.SUPABASE_ANON_KEY }}';" >> .public/config.js
+          touch .public/.nojekyll
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .public
+          publish_branch: gh-pages
+          force_orphan: true

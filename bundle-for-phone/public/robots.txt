@@ -1,0 +1,24 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://your-domain.com/sitemap.xml
+
+# PWA specific
+Allow: /manifest.json
+Allow: /sw.js
+Allow: /playstore-icon.png
+
+
+
+
+
+
+
+
+
+
+
+
+
+
