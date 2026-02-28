@@ -4,12 +4,12 @@ Page HTML autonome pour **visualiser** et **valider** les données naturalistes 
 
 ## Fonctionnalités
 
-- **Connexion** : authentification Supabase (email / mot de passe). Les données affichées dépendent des politiques RLS de votre projet.
+- **Accès** : code d'accès **20290** (pas de compte Supabase).
 - **Observations** : tableau avec toutes les colonnes, photo, date d’encodage, statut validé, bouton « Valider ».
 - **Sites** : tableau avec colonnes, photo, longueur (sites linéaires), bouton « Valider ».
 - **Carte** : fond OpenStreetMap, marqueurs pour les observations et sites, tracés pour les sites linéaires (POP Reptile).
 - **Export CSV** : « Exporter tout » ou « Exporter validées » (données validées uniquement).
-- **Déconnexion**.
+- **Fermer la session** : revient à l'écran de saisie du code.
 
 ## Configuration locale
 
@@ -167,30 +167,29 @@ Tu peux relancer ce workflow à tout moment (après une modification de `validat
 
 Une fois une des deux options en place, la page de validation est la seule chose publiée, et les erreurs de build Jekyll disparaissent.
 
-## Voir toutes les données (plusieurs utilisateurs)
+## Voir toutes les données (politiques RLS)
 
 Par défaut, les politiques RLS Supabase limitent souvent la lecture aux données de l’utilisateur connecté. Pour que les validateurs voient **toutes** les observations et tous les sites, ajoutez une politique du type (à adapter selon vos rôles) :
 
 ```sql
--- Exemple : permettre à tout utilisateur authentifié de lire toutes les observations
-CREATE POLICY "Authenticated read all observations"
-  ON public.observations FOR SELECT TO authenticated
-  USING (true);
+CREATE POLICY "Lecture globale observations"
+  ON public.observations FOR SELECT TO anon USING (true);
 
--- Idem pour les sites
-CREATE POLICY "Authenticated read all sites"
-  ON public.observation_sites FOR SELECT TO authenticated
-  USING (true);
+CREATE POLICY "Lecture globale sites"
+  ON public.observation_sites FOR SELECT TO anon USING (true);
+CREATE POLICY "Update validation observations"
+  ON public.observations FOR UPDATE TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "Update validation sites"
+  ON public.observation_sites FOR UPDATE TO anon USING (true) WITH CHECK (true);
 ```
-
-La mise à jour (`validated`, `validated_at`) reste soumise à vos politiques UPDATE (par ex. « chaque utilisateur met à jour ses propres lignes » ou un rôle admin).
+Sans ces politiques (ou équivalent), seules les lignes autorisées par vos règles RLS seront visibles. Pour la mise à jour (bouton Valider), ajoutez des politiques UPDATE sur `observations` et `observation_sites` pour le rôle `anon` (ou le rôle utilisé).
 
 ## Fichiers
 
 | Fichier            | Rôle |
 |--------------------|------|
-| `index.html`       | Structure de la page, formulaire de connexion, tableaux, carte, boutons. |
-| `style.css`        | Styles (thème sombre, tableau, carte, boutons). |
-| `app.js`           | Logique : auth Supabase, chargement des données, rendu des tableaux, carte Leaflet, validation, export CSV. |
+| `index.html`       | Structure de la page, écran code d'accès, tableaux, carte, boutons. |
+| `style.css`        | Styles (thème sombre, cartes, tableaux, carte). |
+| `app.js`           | Logique : vérification code 20290, chargement Supabase, rendu tableaux, carte Leaflet, validation, export CSV. |
 | `config.js`        | URL et clé Supabase (à ne pas committer avec de vraies clés en local ; en déploiement, le workflow les injecte depuis les secrets). |
 | `config.example.js`| Exemple de configuration. |

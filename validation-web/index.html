@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Validation des données naturalistes — CEN Corse</title>
+  <title>Validation des données — CEN Corse</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -11,30 +14,36 @@
   <div id="app">
     <header class="header">
       <div class="header-inner">
-        <h1 class="logo">CEN Corse — Validation des données</h1>
+        <div class="logo-block">
+          <span class="logo-icon" aria-hidden="true">◇</span>
+          <h1 class="logo">CEN Corse — Validation des données naturalistes</h1>
+        </div>
         <div class="header-actions" id="headerActions"></div>
       </div>
     </header>
 
     <main class="main">
-      <!-- Écran de connexion -->
-      <section id="loginSection" class="login-section">
-        <div class="login-card">
-          <h2>Connexion</h2>
-          <p class="login-hint">Connectez-vous pour visualiser et valider les données.</p>
-          <div id="loginWarning" class="login-warning hidden" role="alert"></div>
-          <form id="loginForm" class="login-form">
-            <label for="loginEmail">Email</label>
-            <input type="email" id="loginEmail" required autocomplete="email" />
-            <label for="loginPassword">Mot de passe</label>
-            <input type="password" id="loginPassword" required autocomplete="current-password" />
-            <p id="loginError" class="error" aria-live="polite"></p>
-            <button type="submit" class="btn btn-primary" id="loginSubmit">Se connecter</button>
+      <!-- Écran code d'accès -->
+      <section id="loginSection" class="gate-section">
+        <div class="gate-bg-shapes" aria-hidden="true">
+          <span class="gate-shape gate-shape-1"></span>
+          <span class="gate-shape gate-shape-2"></span>
+          <span class="gate-shape gate-shape-3"></span>
+        </div>
+        <div class="gate-card">
+          <div class="gate-icon" aria-hidden="true">🔐</div>
+          <h2>Accès à l'interface de validation</h2>
+          <p class="gate-hint">Entrez le code d'accès pour visualiser et valider les données.</p>
+          <form id="loginForm" class="gate-form">
+            <label for="accessCode">Code d'accès</label>
+            <input type="password" id="accessCode" inputmode="numeric" autocomplete="off" placeholder="•••••" maxlength="10" />
+            <p id="loginError" class="gate-error" aria-live="polite"></p>
+            <button type="submit" class="btn btn-primary btn-block" id="loginSubmit">Accéder</button>
           </form>
         </div>
       </section>
 
-      <!-- Application principale (après connexion) -->
+      <!-- Application principale -->
       <section id="dataSection" class="data-section hidden">
         <div class="toolbar">
           <div class="tabs" role="tablist">
@@ -45,16 +54,30 @@
           <div class="toolbar-actions">
             <button type="button" class="btn btn-outline" id="btnExportAll" title="Exporter toutes les données en CSV">Exporter tout (CSV)</button>
             <button type="button" class="btn btn-success" id="btnExportValidated" title="Exporter uniquement les données validées">Exporter validées (CSV)</button>
-            <button type="button" class="btn btn-outline" id="btnLogout">Déconnexion</button>
+            <button type="button" class="btn btn-ghost" id="btnLogout">Fermer la session</button>
           </div>
         </div>
 
+        <div class="stats-row">
+          <div class="stat-card">
+            <span class="stat-value" id="obsCount">0</span>
+            <span class="stat-label">Observations</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="sitesCount">0</span>
+            <span class="stat-label">Sites</span>
+          </div>
+          <div class="stat-card stat-success">
+            <span class="stat-value" id="validatedCount">0</span>
+            <span class="stat-label">Validées</span>
+          </div>
+        </div>
+        <p id="dataHint" class="data-hint hidden" role="status"></p>
+
         <div class="panels">
-          <!-- Panneau Observations -->
           <div id="panelObservations" class="panel active" role="tabpanel">
             <div class="panel-header">
               <h2>Observations naturalistes</h2>
-              <p class="count" id="obsCount">0 enregistrement(s)</p>
             </div>
             <div class="table-wrapper">
               <table class="data-table" id="tableObservations">
@@ -64,11 +87,9 @@
             </div>
           </div>
 
-          <!-- Panneau Sites -->
           <div id="panelSites" class="panel" role="tabpanel">
             <div class="panel-header">
               <h2>Sites d'observation</h2>
-              <p class="count" id="sitesCount">0 enregistrement(s)</p>
             </div>
             <div class="table-wrapper">
               <table class="data-table" id="tableSites">
@@ -78,10 +99,18 @@
             </div>
           </div>
 
-          <!-- Panneau Carte -->
           <div id="panelMap" class="panel panel-map" role="tabpanel">
             <div class="panel-header">
               <h2>Carte des données</h2>
+              <div class="map-controls">
+                <label for="basemapSelect">Fond de carte :</label>
+                <select id="basemapSelect">
+                  <option value="osm">OpenStreetMap</option>
+                  <option value="satellite">Satellite</option>
+                  <option value="topo">Topographique</option>
+                  <option value="dark">Sombre</option>
+                </select>
+              </div>
               <p class="map-legend">
                 <span class="legend-dot obs"></span> Observations
                 <span class="legend-dot site"></span> Sites

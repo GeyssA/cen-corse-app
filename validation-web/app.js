@@ -1,5 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+const ACCESS_CODE = '20290'
+const STORAGE_KEY = 'cen_validation_access'
+
 const SUPABASE_URL = window.SUPABASE_URL
 const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY
 
@@ -15,15 +18,14 @@ let observations = []
 let sites = []
 let mapInstance = null
 let mapLayerGroup = null
+let mapBaseLayers = {}
 
 const loginSection = document.getElementById('loginSection')
 const dataSection = document.getElementById('dataSection')
 const headerActions = document.getElementById('headerActions')
 const loginForm = document.getElementById('loginForm')
-const loginEmail = document.getElementById('loginEmail')
-const loginPassword = document.getElementById('loginPassword')
+const accessCodeInput = document.getElementById('accessCode')
 const loginError = document.getElementById('loginError')
-const loginWarning = document.getElementById('loginWarning')
 const loginSubmit = document.getElementById('loginSubmit')
 const btnLogout = document.getElementById('btnLogout')
 const btnExportAll = document.getElementById('btnExportAll')
@@ -34,41 +36,41 @@ const tbodySites = document.getElementById('tbodySites')
 const theadSites = document.getElementById('theadSites')
 const obsCount = document.getElementById('obsCount')
 const sitesCount = document.getElementById('sitesCount')
+const validatedCount = document.getElementById('validatedCount')
+
+function isAccessGranted() {
+  return sessionStorage.getItem(STORAGE_KEY) === ACCESS_CODE
+}
+
+function grantAccess() {
+  sessionStorage.setItem(STORAGE_KEY, ACCESS_CODE)
+}
+
+function revokeAccess() {
+  sessionStorage.removeItem(STORAGE_KEY)
+}
 
 function showError(el, msg) {
+  if (!el) return
   el.textContent = msg || ''
   el.classList.toggle('error', !!msg)
 }
 
-function showLoginWarning(msg) {
-  if (!loginWarning) return
+function showDataHint(msg) {
+  const el = document.getElementById('dataHint')
+  if (!el) return
   if (!msg) {
-    loginWarning.classList.add('hidden')
-    loginWarning.textContent = ''
+    el.classList.add('hidden')
+    el.textContent = ''
     return
   }
-  loginWarning.textContent = msg
-  loginWarning.classList.remove('hidden')
+  el.textContent = msg
+  el.classList.remove('hidden')
 }
 
-function checkEnvironment() {
-  if (window.location.protocol === 'file:') {
-    showLoginWarning(
-      'Cette page ne peut pas contacter Supabase depuis un fichier ouvert localement (file://). ' +
-      'Lancez un serveur local : dans le dossier validation-web, exécutez « npx serve . » puis ouvrez l’URL indiquée (ex. http://localhost:3000). ' +
-      'Ou déployez la page sur GitHub Pages.'
-    )
-    return
-  }
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('VOTRE') || SUPABASE_ANON_KEY.includes('VOTRE')) {
-    showLoginWarning(
-      'Configurez config.js avec l’URL et la clé anon de votre projet Supabase (Dashboard Supabase > Project Settings > API). ' +
-      'Si vous êtes sur GitHub Pages, ajoutez les secrets SUPABASE_URL et SUPABASE_ANON_KEY au dépôt et relancez le déploiement.'
-    )
-    return
-  }
-  showLoginWarning('')
-}
+function showLoginWarning() {}
+
+function checkEnvironment() {}
 
 function formatDate(iso) {
   if (!iso) return '—'
@@ -95,48 +97,60 @@ function downloadCsv(filename, content) {
   URL.revokeObjectURL(a.href)
 }
 
-async function initAuth() {
-  const { data: { session } } = await supabase.auth.getSession()
-  if (session) {
-    loginSection.classList.add('hidden')
-    dataSection.classList.remove('hidden')
-    headerActions.innerHTML = `<span class="user-email">${session.user.email}</span>`
-    await loadData()
-  } else {
-    loginSection.classList.remove('hidden')
-    dataSection.classList.add('hidden')
-    headerActions.innerHTML = ''
-  }
+function showApp() {
+  loginSection.classList.add('hidden')
+  dataSection.classList.remove('hidden')
+  headerActions.innerHTML = '<span class="session-badge">Session active</span>'
+  loadData()
+}
+
+function hideApp() {
+  revokeAccess()
+  loginSection.classList.remove('hidden')
+  dataSection.classList.add('hidden')
+  headerActions.innerHTML = ''
+  accessCodeInput.value = ''
+  showError(loginError, '')
 }
 
 async function loadData() {
-  const { data: obsData, error: obsError } = await supabase
+  showDataHint('')
+  let obsError = null
+  let sitesError = null
+
+  const { data: obsData, error: oErr } = await supabase
     .from('observations')
     .select('*')
     .order('created_at', { ascending: false })
-  if (obsError) {
-    console.error('Observations:', obsError)
-    observations = []
-  } else {
-    observations = obsData || []
-  }
+  obsError = oErr
+  if (oErr) console.error('Observations:', oErr)
+  observations = obsError ? [] : (obsData || [])
 
-  const { data: sitesData, error: sitesError } = await supabase
+  const { data: sitesData, error: sErr } = await supabase
     .from('observation_sites')
     .select('*')
     .order('created_at', { ascending: false })
-  if (sitesError) {
-    console.error('Sites:', sitesError)
-    sites = []
-  } else {
-    sites = sitesData || []
+  sitesError = sErr
+  if (sErr) console.error('Sites:', sErr)
+  sites = sitesError ? [] : (sitesData || [])
+
+  if (obsError || sitesError) {
+    showDataHint(
+      'Impossible de charger les données. Vérifiez que les secrets SUPABASE_URL et SUPABASE_ANON_KEY sont bien renseignés sur GitHub (Settings > Secrets) et que le déploiement a été relancé après les avoir ajoutés.'
+    )
+  } else if (observations.length === 0 && sites.length === 0) {
+    showDataHint(
+      'Aucune donnée pour le moment. Si vous avez des lignes dans Supabase, ajoutez des politiques RLS permettant au rôle anon de SELECT sur les tables observations et observation_sites (voir README validation-web).'
+    )
   }
 
   renderObservationsTable()
   renderSitesTable()
   updateMap()
-  obsCount.textContent = `${observations.length} enregistrement(s)`
-  sitesCount.textContent = `${sites.length} enregistrement(s)`
+  obsCount.textContent = observations.length.toLocaleString('fr-FR')
+  sitesCount.textContent = sites.length.toLocaleString('fr-FR')
+  const totalValidated = observations.filter(o => o.validated).length + sites.filter(s => s.validated).length
+  validatedCount.textContent = totalValidated.toLocaleString('fr-FR')
 }
 
 function renderObservationsTable() {
@@ -238,6 +252,8 @@ async function validateRow(id, type) {
   renderObservationsTable()
   renderSitesTable()
   updateMap()
+  const totalValidated = observations.filter(o => o.validated).length + sites.filter(s => s.validated).length
+  validatedCount.textContent = totalValidated.toLocaleString('fr-FR')
 }
 
 function updateMap() {
@@ -247,17 +263,41 @@ function updateMap() {
 
   if (!mapInstance) {
     mapInstance = L.map('map').setView(CORSICA_CENTER, 9)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-    }).addTo(mapInstance)
+    mapBaseLayers = {
+      osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap'
+      }),
+      satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; Esri'
+      }),
+      topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenTopoMap'
+      }),
+      dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; CartoDB'
+      })
+    }
+    mapBaseLayers.osm.addTo(mapInstance)
     mapLayerGroup = L.layerGroup().addTo(mapInstance)
+    const sel = document.getElementById('basemapSelect')
+    if (sel) sel.addEventListener('change', (e) => {
+      Object.values(mapBaseLayers).forEach(l => mapInstance.removeLayer(l))
+      mapBaseLayers[e.target.value].addTo(mapInstance)
+      mapLayerGroup.addTo(mapInstance)
+    })
   }
   mapLayerGroup.clearLayers()
 
   observations.forEach(o => {
     if (o.latitude != null && o.longitude != null) {
-      const m = L.marker([o.latitude, o.longitude])
-        .bindPopup(`<strong>Observation</strong><br/>${o.date || ''} — ${o.nom_espece || o.site || ''}`)
+      const popup = `<div class="popup-content"><div class="popup-title">Observation</div><div class="popup-line"><strong>Date :</strong> ${o.date || '—'}</div><div class="popup-line"><strong>Espèce :</strong> ${o.nom_espece || '—'}</div><div class="popup-line"><strong>Site :</strong> ${o.site || '—'}</div></div>`
+      const m = L.circleMarker([o.latitude, o.longitude], {
+        radius: 6,
+        fillColor: '#0ea5e9',
+        color: '#fff',
+        weight: 2,
+        fillOpacity: 0.9
+      }).bindPopup(popup)
       mapLayerGroup.addLayer(m)
     }
   })
@@ -265,12 +305,18 @@ function updateMap() {
   sites.forEach(s => {
     if (s.path_coordinates && Array.isArray(s.path_coordinates) && s.path_coordinates.length >= 2) {
       const latLngs = s.path_coordinates.map(p => [p[0], p[1]])
-      const polyline = L.polyline(latLngs, { color: '#eab308', weight: 4 })
-        .bindPopup(`<strong>Site linéaire</strong><br/>${s.nom_du_site || ''} — ${s.length_meters != null ? s.length_meters + ' m' : ''}`)
+      const popup = `<div class="popup-content"><div class="popup-title">Site linéaire</div><div class="popup-line"><strong>Nom :</strong> ${s.nom_du_site || '—'}</div><div class="popup-line"><strong>Longueur :</strong> ${s.length_meters != null ? s.length_meters + ' m' : '—'}</div></div>`
+      const polyline = L.polyline(latLngs, { color: '#14b8a6', weight: 4 }).bindPopup(popup)
       mapLayerGroup.addLayer(polyline)
     } else if (s.latitude != null && s.longitude != null) {
-      const m = L.circleMarker([s.latitude, s.longitude], { radius: 8, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1, weight: 2 })
-        .bindPopup(`<strong>Site</strong><br/>${s.nom_du_site || ''}`)
+      const popup = `<div class="popup-content"><div class="popup-title">Site</div><div class="popup-line"><strong>Nom :</strong> ${s.nom_du_site || '—'}</div></div>`
+      const m = L.circleMarker([s.latitude, s.longitude], {
+        radius: 8,
+        fillColor: '#10b981',
+        color: '#fff',
+        weight: 2,
+        fillOpacity: 0.9
+      }).bindPopup(popup)
       mapLayerGroup.addLayer(m)
     }
   })
@@ -294,7 +340,7 @@ function exportCsv(validatedOnly = false) {
     rows.push(r)
   })
   const content = [allCols.map(escapeCsvCell).join(','), ...rows.map(r => r.join(','))].join('\r\n')
-  const suffix = validatedOnly ? 'validées' : 'donnees'
+  const suffix = validatedOnly ? 'validees' : 'donnees'
   downloadCsv(`cen-corse-${suffix}-${new Date().toISOString().slice(0, 10)}.csv`, content)
 }
 
@@ -313,54 +359,34 @@ function setupTabs() {
           (id === 'panelMap' && tabName === 'map')
         p.classList.toggle('active', active)
       })
-      if (tabName === 'map') {
-        setTimeout(updateMap, 100)
-      }
+      if (tabName === 'map') setTimeout(updateMap, 100)
     })
   })
 }
 
-loginForm.addEventListener('submit', async (e) => {
+loginForm.addEventListener('submit', (e) => {
   e.preventDefault()
   showError(loginError, '')
-  loginSubmit.disabled = true
-  try {
-    const { error } = await supabase.auth.signInWithPassword({
-      email: loginEmail.value.trim(),
-      password: loginPassword.value
-    })
-    if (error) {
-      showError(loginError, error.message || 'Erreur de connexion')
-      return
-    }
-    await initAuth()
-  } catch (err) {
-    const msg = err && err.message
-    if (msg && (msg.includes('fetch') || msg.includes('Failed to fetch') || msg.includes('NetworkError'))) {
-      showError(
-        loginError,
-        'Impossible de contacter le serveur. Vérifiez que vous n’ouvrez pas la page depuis un fichier local (file://) — utilisez « npx serve . » dans le dossier validation-web ou la version déployée sur GitHub Pages. Vérifiez aussi que config.js contient la bonne URL Supabase (https://xxx.supabase.co).'
-      )
-    } else {
-      showError(loginError, (err && err.message) || 'Erreur de connexion')
-    }
-  } finally {
-    loginSubmit.disabled = false
+  const code = accessCodeInput.value.trim()
+  if (code !== ACCESS_CODE) {
+    showError(loginError, 'Code incorrect.')
+    return
   }
+  grantAccess()
+  showApp()
 })
 
-btnLogout.addEventListener('click', async () => {
-  await supabase.auth.signOut()
-  await initAuth()
+btnLogout.addEventListener('click', () => {
+  hideApp()
 })
 
 btnExportAll.addEventListener('click', () => exportCsv(false))
 btnExportValidated.addEventListener('click', () => exportCsv(true))
 
-supabase.auth.onAuthStateChange(async () => {
-  await initAuth()
-})
-
 setupTabs()
-checkEnvironment()
-initAuth()
+
+if (isAccessGranted()) {
+  showApp()
+} else {
+  hideApp()
+}
