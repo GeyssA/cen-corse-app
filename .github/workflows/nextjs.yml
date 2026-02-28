@@ -1,0 +1,51 @@
+# Déploie uniquement validation-web via GitHub Actions (sans Jekyll).
+# Réglage : Settings > Pages > Build and deployment > Source = "GitHub Actions".
+# Secrets : SUPABASE_URL, SUPABASE_ANON_KEY.
+
+name: Deploy validation-web (GitHub Actions)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: github-pages
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Prepare and upload
+        run: |
+          mkdir -p .public
+          cp validation-web/index.html validation-web/style.css validation-web/app.js .public/
+          echo "window.SUPABASE_URL = '${{ secrets.SUPABASE_URL }}';" > .public/config.js
+          echo "window.SUPABASE_ANON_KEY = '${{ secrets.SUPABASE_ANON_KEY }}';" >> .public/config.js
+          touch .public/.nojekyll
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.public'
+
+  deploy-pages:
+    needs: deploy
+    runs-on: ubuntu-latest
+    environment: github-pages
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
