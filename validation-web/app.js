@@ -430,7 +430,7 @@ function updateMap() {
   const filteredSitesList = getFilteredSites()
 
   if (!mapInstance) {
-    mapInstance = L.map('map').setView(CORSICA_CENTER, 9)
+    mapInstance = L.map('map').setView(CORSICA_CENTER, 8)
     mapBaseLayers = {
       osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }),
       satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; Esri' }),
@@ -533,7 +533,7 @@ function zoomMapToFiltered() {
   }
   if (latLngs.length === 0) return
   const bounds = L.latLngBounds(latLngs)
-  mapInstance.fitBounds(bounds.pad(0.15))
+  mapInstance.fitBounds(bounds.pad(0.15), { maxZoom: 10 })
 }
 
 function bindSearchAndMapControls() {
