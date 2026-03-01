@@ -150,7 +150,8 @@ bundle-for-phone.zip
 bundle-for-phone/app-release.aab
 bundle-for-phone/app-release.apk
 
-
+# validation-web: config locale (Supabase URL/anon key)
+validation-web/config.js
 
 
 

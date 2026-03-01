@@ -33,6 +33,8 @@ jobs:
         run: |
           mkdir -p .public
           cp validation-web/index.html validation-web/style.css validation-web/app.js .public/
+          mkdir -p .public/assets
+          cp -r validation-web/assets/* .public/assets/ 2>/dev/null || true
           echo "window.SUPABASE_URL = '${{ secrets.SUPABASE_URL }}';" > .public/config.js
           echo "window.SUPABASE_ANON_KEY = '${{ secrets.SUPABASE_ANON_KEY }}';" >> .public/config.js
           touch .public/.nojekyll

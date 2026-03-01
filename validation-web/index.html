@@ -4,20 +4,23 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Validation des données — CEN Corse</title>
+  <link rel="icon" type="image/png" href="assets/Logo_CENCorse-removebg-preview.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="app">
     <header class="header">
       <div class="header-inner">
-        <div class="logo-block">
-          <span class="logo-icon" aria-hidden="true">◇</span>
-          <h1 class="logo">CEN Corse — Validation des données naturalistes</h1>
+        <div class="logo-bg">
+          <img src="assets/Logo_CENCorse-removebg-preview.png" alt="CEN Corse" class="header-logo" />
         </div>
+        <h1 class="logo">Validation des données naturalistes</h1>
         <div class="header-actions" id="headerActions"></div>
       </div>
     </header>
@@ -31,7 +34,11 @@
           <span class="gate-shape gate-shape-3"></span>
         </div>
         <div class="gate-card">
-          <div class="gate-icon" aria-hidden="true">🔐</div>
+          <div class="gate-brand">
+            <div class="gate-logo-bg">
+              <img src="assets/Logo_CENCorse-removebg-preview.png" alt="CEN Corse" class="gate-logo" />
+            </div>
+          </div>
           <h2>Accès à l'interface de validation</h2>
           <p class="gate-hint">Entrez le code d'accès pour visualiser et valider les données.</p>
           <form id="loginForm" class="gate-form">
@@ -47,39 +54,43 @@
       <section id="dataSection" class="data-section hidden">
         <div class="toolbar">
           <div class="tabs" role="tablist">
-            <button type="button" class="tab active" data-tab="observations" aria-selected="true">Observations</button>
-            <button type="button" class="tab" data-tab="sites" aria-selected="false">Sites</button>
-            <button type="button" class="tab" data-tab="map" aria-selected="false">Carte</button>
+            <button type="button" class="tab active" data-tab="observations" aria-selected="true"><span class="tab-label">Observations</span> <span class="tab-count" id="tabCountObs">(0)</span></button>
+            <button type="button" class="tab" data-tab="sites" aria-selected="false"><span class="tab-label">Sites</span> <span class="tab-count" id="tabCountSites">(0)</span></button>
+            <button type="button" class="tab" data-tab="map" aria-selected="false"><span class="tab-label">Carte</span></button>
           </div>
           <div class="toolbar-actions">
+            <select id="filterValidated" class="filter-validated" title="Afficher tout ou validées uniquement">
+              <option value="all">Tout</option>
+              <option value="validated">Validées uniquement</option>
+            </select>
             <button type="button" class="btn btn-outline" id="btnExportAll" title="Exporter toutes les données en CSV">Exporter tout (CSV)</button>
             <button type="button" class="btn btn-success" id="btnExportValidated" title="Exporter uniquement les données validées">Exporter validées (CSV)</button>
             <button type="button" class="btn btn-ghost" id="btnLogout">Fermer la session</button>
           </div>
         </div>
 
-        <div class="stats-row">
-          <div class="stat-card">
-            <span class="stat-value" id="obsCount">0</span>
-            <span class="stat-label">Observations</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-value" id="sitesCount">0</span>
-            <span class="stat-label">Sites</span>
-          </div>
-          <div class="stat-card stat-success">
-            <span class="stat-value" id="validatedCount">0</span>
-            <span class="stat-label">Validées</span>
-          </div>
-        </div>
         <p id="dataHint" class="data-hint hidden" role="status"></p>
 
         <div class="panels">
           <div id="panelObservations" class="panel active" role="tabpanel">
             <div class="panel-header">
               <h2>Observations naturalistes</h2>
+              <div class="panel-toolbar">
+                <select id="searchObsColumn" class="search-column-select" title="Colonne de recherche">
+                  <option value="nom_espece">Espèce</option>
+                  <option value="site">Site</option>
+                  <option value="protocole">Protocole</option>
+                  <option value="passage">Passage</option>
+                  <option value="groupe">Groupe</option>
+                  <option value="observateur">Observateur</option>
+                  <option value="remarques">Remarques</option>
+                </select>
+                <input type="search" id="searchObs" class="search-input" placeholder="Rechercher…" list="searchObsSuggestions" autocomplete="off" />
+                <datalist id="searchObsSuggestions"></datalist>
+                <button type="button" class="btn btn-outline btn-sm" id="btnShowObsOnMap">Voir sur la carte</button>
+              </div>
             </div>
-            <div class="table-wrapper">
+            <div class="table-wrapper table-wrapper-integrated">
               <table class="data-table" id="tableObservations">
                 <thead id="theadObservations"></thead>
                 <tbody id="tbodyObservations"></tbody>
@@ -90,8 +101,18 @@
           <div id="panelSites" class="panel" role="tabpanel">
             <div class="panel-header">
               <h2>Sites d'observation</h2>
+              <div class="panel-toolbar">
+                <select id="searchSitesColumn" class="search-column-select" title="Colonne de recherche">
+                  <option value="nom_du_site">Nom du site</option>
+                  <option value="protocole">Protocole</option>
+                  <option value="date">Date</option>
+                </select>
+                <input type="search" id="searchSites" class="search-input" placeholder="Rechercher…" list="searchSitesSuggestions" autocomplete="off" />
+                <datalist id="searchSitesSuggestions"></datalist>
+                <button type="button" class="btn btn-outline btn-sm" id="btnShowSitesOnMap">Voir sur la carte</button>
+              </div>
             </div>
-            <div class="table-wrapper">
+            <div class="table-wrapper table-wrapper-integrated">
               <table class="data-table" id="tableSites">
                 <thead id="theadSites"></thead>
                 <tbody id="tbodySites"></tbody>
@@ -100,10 +121,10 @@
           </div>
 
           <div id="panelMap" class="panel panel-map" role="tabpanel">
-            <div class="panel-header">
+            <div class="panel-header panel-header-map">
               <h2>Carte des données</h2>
               <div class="map-controls">
-                <label for="basemapSelect">Fond de carte :</label>
+                <label for="basemapSelect">Fond :</label>
                 <select id="basemapSelect">
                   <option value="osm">OpenStreetMap</option>
                   <option value="satellite">Satellite</option>
@@ -111,24 +132,48 @@
                   <option value="dark">Sombre</option>
                 </select>
               </div>
-              <p class="map-legend">
-                <span class="legend-dot obs"></span> Observations
-                <span class="legend-dot site"></span> Sites
-                <span class="legend-dot line"></span> Sites linéaires
-              </p>
+              <div class="map-layer-toggles">
+                <label class="map-checkbox-label"><input type="checkbox" id="mapShowObs" checked /> <span class="legend-dot obs"></span> Observations</label>
+                <label class="map-checkbox-label"><input type="checkbox" id="mapShowSites" checked /> <span class="legend-dot site"></span> Sites</label>
+                <label class="map-checkbox-label"><input type="checkbox" id="mapShowSitesLine" checked /> <span class="legend-dot line"></span> Linéaires</label>
+              </div>
             </div>
-            <div id="map" class="map-container"></div>
+            <div id="map" class="map-container map-container-integrated"></div>
           </div>
         </div>
       </section>
     </main>
 
     <footer class="footer">
-      <p>Conservatoire d'Espaces Naturels de Corse — Interface de validation des données naturalistes</p>
+      <div class="footer-inner">
+        <p>Conservatoire d'espaces naturels de Corse — Interface de validation des données naturalistes</p>
+      </div>
     </footer>
   </div>
 
+  <div id="lightbox" class="lightbox hidden" role="dialog" aria-modal="true" aria-label="Voir la photo">
+    <button type="button" class="lightbox-close" aria-label="Fermer">×</button>
+    <button type="button" class="lightbox-prev" aria-label="Photo précédente">‹</button>
+    <div class="lightbox-content">
+      <img id="lightboxImg" src="" alt="Photo" />
+    </div>
+    <button type="button" class="lightbox-next" aria-label="Photo suivante">›</button>
+    <span class="lightbox-counter" id="lightboxCounter"></span>
+  </div>
+
+  <div id="exportModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
+    <div class="modal export-modal">
+      <h2 id="exportModalTitle" class="modal-title">Confirmer l'export</h2>
+      <p class="modal-message" id="exportModalMessage"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="exportModalCancel">Annuler</button>
+        <button type="button" class="btn btn-primary" id="exportModalConfirm">Confirmer</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="config.js"></script>
   <script type="module" src="app.js"></script>
 </body>

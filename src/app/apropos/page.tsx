@@ -19,7 +19,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 // }
 
 const presentationData = {
-  title: "Conservatoire d'Espaces Naturels de Corse",
+  title: "Conservatoire d'espaces naturels de Corse",
   subtitle: "Protéger et valoriser le patrimoine naturel de la Corse",
   description: "Le Conservatoire d'espaces naturels Corse (CEN Corse) est une association de loi 1901 à but non lucratif, agréée au titre de la protection de l'environnement. Créé en 1972 à l'initiative de naturalistes locaux, il œuvre pour préserver le patrimoine naturel et la biodiversité de l'île. Implanté à Borgo en Haute-Corse et à Ajaccio en Corse-du-Sud, le CEN Corse réunit une équipe de 16 salariés aux expertises variées : Suivis faunistiques, ornithologie, herpétologie, écologie terrestre, gestion de projets complexes, biostatistique, gestion et restauration d'espaces naturels, cartographie, et conception de projets de recherches expérimentaux (génétique, acoustique, écomorphologie, sanitaire, origine de mortalité, etc.). Cette diversité d'expertises rend l'équipe particulièrement polyvalente et capable de répondre efficacement à une large gamme d'enjeux environnementaux.",
   addresses: [

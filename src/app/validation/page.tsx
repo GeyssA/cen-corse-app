@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { getObservationsByUser, type Observation } from '@/lib/observations'
 import { getSitesByUser, type ObservationSite } from '@/lib/sites'
+import { parsePhotoUrls } from '@/lib/photoUrls'
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -164,13 +165,19 @@ export default function ValidationPage() {
                   {observations.map((o) => (
                     <tr key={o.id} className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30">
                       <td className="p-2">
-                        {o.photo_url ? (
-                          <a href={o.photo_url} target="_blank" rel="noopener noreferrer" className="block w-14 h-14 rounded overflow-hidden bg-gray-100 dark:bg-gray-700">
-                            <img src={o.photo_url} alt="" className="w-full h-full object-cover" />
-                          </a>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
+                        {(() => {
+                          const urls = parsePhotoUrls(o.photo_url)
+                          if (urls.length === 0) return <span className="text-gray-400">—</span>
+                          return (
+                            <div className="flex gap-1 flex-wrap">
+                              {urls.map((url, i) => (
+                                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-12 h-12 rounded overflow-hidden bg-gray-100 dark:bg-gray-700 shrink-0">
+                                  <img src={url} alt="" className="w-full h-full object-cover" />
+                                </a>
+                              ))}
+                            </div>
+                          )
+                        })()}
                       </td>
                       <td className="p-2">{o.date ?? '—'}</td>
                       <td className="p-2">{o.protocole ?? '—'}</td>
@@ -213,13 +220,19 @@ export default function ValidationPage() {
                   {sites.map((s) => (
                     <tr key={s.id} className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30">
                       <td className="p-2">
-                        {s.photo_url ? (
-                          <a href={s.photo_url} target="_blank" rel="noopener noreferrer" className="block w-14 h-14 rounded overflow-hidden bg-gray-100 dark:bg-gray-700">
-                            <img src={s.photo_url} alt="" className="w-full h-full object-cover" />
-                          </a>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
+                        {(() => {
+                          const urls = parsePhotoUrls(s.photo_url)
+                          if (urls.length === 0) return <span className="text-gray-400">—</span>
+                          return (
+                            <div className="flex gap-1 flex-wrap">
+                              {urls.map((url, i) => (
+                                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-12 h-12 rounded overflow-hidden bg-gray-100 dark:bg-gray-700 shrink-0">
+                                  <img src={url} alt="" className="w-full h-full object-cover" />
+                                </a>
+                              ))}
+                            </div>
+                          )
+                        })()}
                       </td>
                       <td className="p-2">{s.date ?? '—'}</td>
                       <td className="p-2">{s.protocole ?? '—'}</td>

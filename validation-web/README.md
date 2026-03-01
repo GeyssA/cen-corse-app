@@ -16,13 +16,28 @@ Page HTML autonome pour **visualiser** et **valider** les données naturalistes 
 1. Copiez `config.example.js` vers `config.js`.
 2. Dans `config.js`, remplacez `VOTRE_PROJECT_REF` et `VOTRE_ANON_KEY` par l’URL et la clé anon de votre projet Supabase (Dashboard > Project Settings > API).
 
-Pour tester en local, servez le dossier avec un serveur HTTP (évite les soucis CORS en `file://`) :
+**Pourquoi ça ne marche pas en ouvrant `index.html` directement (double-clic / file://) ?**  
+La page charge des scripts en **modules** et appelle Supabase. Les navigateurs bloquent ces requêtes depuis une origine `file://`. Il faut donc **servir le dossier avec un serveur HTTP**.
+
+**Pour tester en local (avec les données du projet) :**
+
+1. Depuis la racine du dépôt, copiez l’URL et la clé anon dans `validation-web/config.js` (ex. depuis `.env.local` : `NEXT_PUBLIC_SUPABASE_URL` → `window.SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` → `window.SUPABASE_ANON_KEY`). Ne commitez pas ce `config.js` s’il contient de vraies clés.
+2. Lancez un serveur dans le dossier `validation-web` :
 
 ```bash
-npx serve validation-web
+cd validation-web
+npx serve . -p 5000
 ```
 
-Puis ouvrez l’URL indiquée (ex. http://localhost:3000).
+3. Ouvrez **http://localhost:5000**, entrez le code **20290**, puis cliquez sur « Accéder ».
+
+Alternative (sans modifier `config.js`) : depuis la racine du dépôt :
+
+```bash
+npx serve validation-web -p 5000
+```
+
+Puis ouvrez http://localhost:5000 (la connexion Supabase ne fonctionnera que si `config.js` contient de vraies valeurs).
 
 ## Déploiement sur GitHub Pages
 
@@ -169,7 +184,15 @@ Une fois une des deux options en place, la page de validation est la seule chose
 
 ## Voir toutes les données (politiques RLS)
 
-Par défaut, les politiques RLS Supabase limitent souvent la lecture aux données de l’utilisateur connecté. Pour que les validateurs voient **toutes** les observations et tous les sites, ajoutez une politique du type (à adapter selon vos rôles) :
+Par défaut, les politiques RLS Supabase limitent souvent la lecture aux données de l’utilisateur connecté. Pour que l'interface de validation (code 20290, clé **anon**) voie **toutes** les observations et tous les sites :
+
+1. Ouvre le **Dashboard Supabase** → ton projet.
+2. Va dans **SQL Editor** → **New query**.
+3. Ouvre le fichier **`validation-web/supabase-rls-anon.sql`** à la racine du dépôt, copie tout son contenu, colle-le dans l'éditeur SQL, puis clique sur **Run**.
+
+Cela crée les politiques permettant au rôle `anon` de faire `SELECT` et `UPDATE` sur les tables `observations` et `observation_sites`. Sans ces politiques (ou équivalent), la page renverra 0 ligne ou une erreur du type « row-level security » / « policy ».
+
+**Référence manuelle (si vous préférez créer les politiques à la main) :**
 
 ```sql
 CREATE POLICY "Lecture globale observations"
@@ -193,3 +216,4 @@ Sans ces politiques (ou équivalent), seules les lignes autorisées par vos règ
 | `app.js`           | Logique : vérification code 20290, chargement Supabase, rendu tableaux, carte Leaflet, validation, export CSV. |
 | `config.js`        | URL et clé Supabase (à ne pas committer avec de vraies clés en local ; en déploiement, le workflow les injecte depuis les secrets). |
 | `config.example.js`| Exemple de configuration. |
+| `supabase-rls-anon.sql` | Script SQL à exécuter dans Supabase pour autoriser la lecture/validation en anon (voir section RLS ci-dessus). |

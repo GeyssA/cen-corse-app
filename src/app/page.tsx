@@ -477,7 +477,7 @@ function HomeContent() {
               theme === 'light' ? 'text-gray-500' : 'text-gray-400'
             }`}>
                 <div className="font-medium">
-                  © 2025 Conservatoire d'Espaces Naturels de Corse
+                  © 2025 Conservatoire d'espaces naturels de Corse
                 </div>
                 <div className="flex items-center justify-center space-x-1">
                   <span>Développé par</span>

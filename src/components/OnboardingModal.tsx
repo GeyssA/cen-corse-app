@@ -19,7 +19,7 @@ export default function OnboardingModal({ isOpen, onClose, userId }: OnboardingM
 
   const steps = [
     {
-      title: "Bienvenue sur l'application du Conservatoire d'Espaces Naturels Corse",
+      title: "Bienvenue sur l'application du Conservatoire d'espaces naturels de Corse",
       content: (
         <div className="flex flex-col items-center justify-center space-y-1">
           {/* Logo CEN Corse en grand */}
@@ -36,7 +36,7 @@ export default function OnboardingModal({ isOpen, onClose, userId }: OnboardingM
           <h1 className={`text-lg font-bold mb-5 text-center ${
             theme === 'light' ? 'text-gray-800' : 'text-white'
           }`}>
-            Bienvenue sur l'application du Conservatoire d'Espaces Naturels Corse
+            Bienvenue sur l'application du Conservatoire d'espaces naturels de Corse
           </h1>
           
           {/* Message de bienvenue */}

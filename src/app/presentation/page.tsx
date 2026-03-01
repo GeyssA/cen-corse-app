@@ -23,11 +23,11 @@ const PHOTOS = [
   },
   {
     src: '/photos_page_accueil/Bufotes viridis balericus-Boziu (1100 mètres d\'altitude)-2025-© Ertzscheid N..jpg',
-    name: 'Bufotes viridis balericus\nBoziu (1100 m)\n2025\n© Ertzscheid N.'
+    name: 'Bufotes viridis balearicus\nBoziu (1100 m)\n2025\n© Ertzscheid N.'
   },
   {
     src: '/photos_page_accueil/Amplexus de Bufotes viridis balericus-Boziu (1100 mètres d\'altitude)-2025-© Ertzscheid N..jpg',
-    name: 'Amplexus de Bufotes viridis balericus\nBoziu (1100 m)\n2025\n© Ertzscheid N.'
+    name: 'Amplexus de Bufotes viridis balearicus\nBoziu (1100 m)\n2025\n© Ertzscheid N.'
   }
 ]
 
@@ -175,7 +175,7 @@ export default function Presentation() {
   const [showInfoModal, setShowInfoModal] = useState(false)
   const [modalPosition, setModalPosition] = useState({ top: '50%', left: '50%' })
   const [presentationData] = useState<PresentationData>({
-    title: "Conservatoire d'Espaces Naturels de Corse",
+    title: "Conservatoire d'espaces naturels de Corse",
     subtitle: "Protéger et valoriser le patrimoine naturel de la Corse",
     description: " Le Conservatoire d'espaces naturels Corse (CEN Corse) est une association de loi 1901 à but non lucratif, agréée au titre de la protection de l'environnement. Créé en 1972 à l'initiative de naturalistes locaux, il œuvre pour préserver le patrimoine naturel et la biodiversité de l'île. Implanté à Borgo en Haute-Corse et à Ajaccio en Corse-du-Sud, le CEN Corse réunit une équipe de 16 salariés aux expertises variées : Suivis faunistiques, ornithologie, herpétologie, écologie terrestre, gestion de projets complexes, biostatistique, gestion et restauration d'espaces naturels, cartographie, et conception de projets de recherches expérimentaux (génétique, acoustique, écomorphologie, sanitaire, origine de mortalité, etc.). Cette diversité d'expertises rend l'équipe particulièrement polyvalente et capable de répondre efficacement à une large gamme d'enjeux environnementaux.",
 
