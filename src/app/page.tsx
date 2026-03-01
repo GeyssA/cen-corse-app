@@ -8,11 +8,14 @@ import MainNavigation from '@/components/navigation/MainNavigation'
 import { LazyPWAInstallPrompt, LazyOnboardingModal } from '@/components/LazyComponent'
 import ObservationModal from '@/components/ObservationModal'
 import AddSiteModal from '@/components/AddSiteModal'
-import ObservationsSitesMapModal from '@/components/ObservationsSitesMapModal'
+import ObservationsSitesMapModal, { preloadMapChunk } from '@/components/ObservationsSitesMapModal'
 import { isCapacitorNative, requestLocationPermissionIfNeeded } from '@/lib/geolocation'
 // import { useOfflineSync } from '@/hooks/useOfflineSync'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { getSitesByUser } from '@/lib/sites'
+import { getObservationsByUser } from '@/lib/observations'
+import { setCachedMapData } from '@/lib/mapDataCache'
 import { useProjectsContext } from '@/contexts/ProjectsContext'
 import { getActivities, Activity } from '@/lib/activities'
 
@@ -154,6 +157,19 @@ function HomeContent() {
   // Compter les projets en cours (status === 'active')
   const activeProjectsCount = projects.filter(p => p.status === 'active').length;
 
+  // Précharger le chunk de la carte en arrière-plan pour ouvrir "Voir la map" plus vite
+  useEffect(() => {
+    if (!user?.id) return;
+    const t = setTimeout(() => {
+      preloadMapChunk();
+      // Précharger aussi les données (sites + obs) pour que la 1ère ouverture soit plus rapide
+      Promise.all([getObservationsByUser(user.id), getSitesByUser(user.id)])
+        .then(([observations, sites]) => setCachedMapData(user.id, { observations, sites }))
+        .catch(() => {});
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [user?.id]);
+
   // Plus besoin d'intercepter - les templates redirigent directement
 
   // Vérifier si c'est la première connexion - SEULEMENT si connecté
@@ -252,8 +268,8 @@ function HomeContent() {
         </div>
       </div>
 
-      {/* Fond adaptatif pour la section principale */}
-      <div className={`min-h-screen w-full overflow-x-hidden transition-all duration-300 pb-28 ${
+      {/* Fond adaptatif pour la section principale — pas de pb-28, la réserve pour la nav est dans .scroll-container */}
+      <div className={`min-h-screen w-full overflow-x-hidden transition-all duration-300 ${
         theme === 'dark' 
           ? 'bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950' 
           : 'bg-gradient-to-b from-slate-50 via-blue-50/80 to-emerald-50/50'
@@ -301,81 +317,82 @@ function HomeContent() {
             </button>
           </section>
 
-          {/* Données naturalistes — bandeau mis en avant, titre effet peinture */}
-          <section className={`rounded-2xl overflow-hidden shadow-lg border ${
+          {/* Données naturalistes — mis en avant pour attirer l'œil */}
+          <section className={`mt-6 relative pl-4 pr-4 py-4 rounded-xl border-l-4 ${
             theme === 'light'
-              ? 'bg-gradient-to-br from-emerald-50 via-white to-teal-50/80 border-emerald-200/60'
-              : 'bg-gradient-to-br from-gray-800 via-gray-800/95 to-gray-900 border-emerald-500/20'
+              ? 'bg-gradient-to-r from-emerald-50/90 to-teal-50/50 border-emerald-500 shadow-sm'
+              : 'bg-gradient-to-r from-emerald-950/40 to-teal-950/20 border-emerald-500 shadow-md'
           }`}>
-            {/* Bandeau titre */}
-            <div className={`relative px-5 py-4 border-b ${
-              theme === 'light'
-                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 border-emerald-500/30'
-                : 'bg-gradient-to-r from-emerald-700 to-teal-700 border-emerald-500/30'
-            }`}>
-              <div className="flex items-center gap-3 relative">
-                <span className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/20 backdrop-blur-sm">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                    <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                theme === 'light' ? 'bg-emerald-500/20 text-emerald-600' : 'bg-emerald-400/25 text-emerald-400'
+              }`}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                  <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </span>
+              <h2 className={`text-lg font-bold tracking-tight ${
+                theme === 'light' ? 'text-emerald-800' : 'text-emerald-200'
+              }`}>
+                Données naturalistes
+              </h2>
+            </div>
+            <p className={`text-sm mb-4 ${theme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}>
+              Contribuez à la connaissance de la biodiversité en enregistrant vos observations sur le terrain.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                onClick={async () => {
+                  if (isCapacitorNative()) await requestLocationPermissionIfNeeded()
+                  setShowObservationModal(true)
+                }}
+                className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all duration-200 hover:opacity-90 hover:scale-[1.01] active:scale-[0.99] border ${
+                  theme === 'light'
+                    ? 'bg-white/80 hover:bg-white text-emerald-800 border-emerald-200/60 shadow-sm'
+                    : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 border-emerald-500/30'
+                }`}
+              >
+                <span className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${theme === 'light' ? 'bg-emerald-500/20 text-emerald-600' : 'bg-emerald-400/20 text-emerald-400'}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2V5a2 2 0 00-2-2h-2" />
+                    <path d="M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                   </svg>
                 </span>
-                <h2 className="text-lg font-bold text-white drop-shadow-md tracking-tight">
-                  Données naturalistes
-                </h2>
-              </div>
+                <div className="min-w-0">
+                  <span className="text-sm font-medium block">Ajouter une observation</span>
+                  <span className="text-xs opacity-80">Espèce, lieu, effectif…</span>
+                </div>
+              </button>
+              <button
+                onClick={async () => {
+                  if (isCapacitorNative()) await requestLocationPermissionIfNeeded()
+                  setShowAddSiteModal(true)
+                }}
+                className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all duration-200 hover:opacity-90 hover:scale-[1.01] active:scale-[0.99] border ${
+                  theme === 'light'
+                    ? 'bg-white/80 hover:bg-white text-sky-800 border-sky-200/60 shadow-sm'
+                    : 'bg-sky-500/10 hover:bg-sky-500/20 text-sky-200 border-sky-500/20'
+                }`}
+              >
+                <span className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${theme === 'light' ? 'bg-sky-500/20 text-sky-600' : 'bg-sky-400/20 text-sky-400'}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                    <path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </span>
+                <div className="min-w-0">
+                  <span className="text-sm font-medium block">Ajouter un site</span>
+                  <span className="text-xs opacity-80">Lieu d’observation récurrent</span>
+                </div>
+              </button>
             </div>
-            <div className="p-5">
-              <p className={`text-sm mb-4 ${theme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}>
-                Contribuez à la connaissance de la biodiversité en enregistrant vos observations sur le terrain.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  onClick={async () => {
-                    if (isCapacitorNative()) await requestLocationPermissionIfNeeded()
-                    setShowObservationModal(true)
-                  }}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-xl text-center transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
-                    theme === 'light'
-                      ? 'bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-800 border border-emerald-200/60'
-                      : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-200 border border-emerald-500/20'
-                  }`}
-                >
-                  <span className={`w-11 h-11 rounded-full flex items-center justify-center ${theme === 'light' ? 'bg-emerald-500/20 text-emerald-600' : 'bg-emerald-400/20 text-emerald-400'}`}>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                      <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2V5a2 2 0 00-2-2h-2" />
-                      <path d="M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                    </svg>
-                  </span>
-                  <span className="text-sm font-medium leading-tight">Ajouter une observation</span>
-                  <span className="text-[10px] opacity-80">Espèce, lieu, effectif…</span>
-                </button>
-                <button
-                  onClick={async () => {
-                    if (isCapacitorNative()) await requestLocationPermissionIfNeeded()
-                    setShowAddSiteModal(true)
-                  }}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-xl text-center transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
-                    theme === 'light'
-                      ? 'bg-sky-500/10 hover:bg-sky-500/15 text-sky-800 border border-sky-200/60'
-                      : 'bg-sky-500/10 hover:bg-sky-500/20 text-sky-200 border border-sky-500/20'
-                  }`}
-                >
-                  <span className={`w-11 h-11 rounded-full flex items-center justify-center ${theme === 'light' ? 'bg-sky-500/20 text-sky-600' : 'bg-sky-400/20 text-sky-400'}`}>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                      <path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </span>
-                  <span className="text-sm font-medium leading-tight">Ajouter un site</span>
-                  <span className="text-[10px] opacity-80">Lieu d’observation récurrent</span>
-                </button>
-              </div>
+            <div className="flex flex-col gap-2 mt-2">
               <button
                 onClick={() => setShowMapModal(true)}
-                className={`w-full mt-3 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 border ${
                   theme === 'light'
-                    ? 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200'
-                    : 'bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-600'
+                    ? 'bg-gray-100/80 hover:bg-gray-200/80 text-gray-700 border-gray-200/60'
+                    : 'bg-gray-800/60 hover:bg-gray-700/60 text-gray-300 border-gray-600/50'
                 }`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -385,16 +402,16 @@ function HomeContent() {
               </button>
               <button
                 onClick={() => router.push('/validation')}
-                className={`w-full mt-2 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 border ${
                   theme === 'light'
-                    ? 'bg-amber-500/10 hover:bg-amber-500/15 text-amber-800 border border-amber-200/60'
-                    : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 border border-amber-500/20'
+                    ? 'bg-amber-500/10 hover:bg-amber-500/15 text-amber-800 border-amber-200/50'
+                    : 'bg-amber-500/10 hover:bg-amber-500/15 text-amber-200 border-amber-500/20'
                 }`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Exporter les données (CSV)
+                Exporter les données (.csv)
               </button>
             </div>
           </section>
@@ -467,8 +484,8 @@ function HomeContent() {
             userId={user?.id}
           />
 
-        {/* Footer — marge basse pour ne pas être caché par les onglets */}
-        <footer className="w-full pt-6 pb-11 px-4">
+        {/* Footer — marge réduite, pas d'espace excessif en prod */}
+        <footer className="w-full pt-6 pb-4 px-4">
           <div className="max-w-lg mx-auto text-center space-y-4">
             <div className={`w-20 h-px mx-auto ${
               theme === 'light' ? 'bg-gradient-to-r from-transparent via-gray-300 to-transparent' : 'bg-gradient-to-r from-transparent via-gray-500 to-transparent'

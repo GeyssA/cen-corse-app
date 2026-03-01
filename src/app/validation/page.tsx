@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation'
 import ProtectedRoute from '@/components/auth/ProtectedRoute'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
-import { getObservationsByUser, type Observation } from '@/lib/observations'
-import { getSitesByUser, type ObservationSite } from '@/lib/sites'
-import { parsePhotoUrls } from '@/lib/photoUrls'
+import { getObservationsByUser, updateObservationPhotoUrls, type Observation } from '@/lib/observations'
+import { getSitesByUser, updateSitePhotoUrls, type ObservationSite } from '@/lib/sites'
+import { parsePhotoUrls, serializePhotoUrls } from '@/lib/photoUrls'
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -60,6 +60,22 @@ export default function ValidationPage() {
       setLoading(false)
     })
   }, [user?.id])
+
+  const handleObservationPhotoError = async (observationId: string, failedUrl: string) => {
+    const o = observations.find((x) => x.id === observationId)
+    if (!o) return
+    const urls = parsePhotoUrls(o.photo_url).filter((u) => u !== failedUrl)
+    const { error } = await updateObservationPhotoUrls(observationId, urls)
+    if (!error) setObservations((prev) => prev.map((obs) => (obs.id === observationId ? { ...obs, photo_url: serializePhotoUrls(urls) } : obs))))
+  }
+
+  const handleSitePhotoError = async (siteId: string, failedUrl: string) => {
+    const s = sites.find((x) => x.id === siteId)
+    if (!s) return
+    const urls = parsePhotoUrls(s.photo_url).filter((u) => u !== failedUrl)
+    const { error } = await updateSitePhotoUrls(siteId, urls)
+    if (!error) setSites((prev) => prev.map((site) => (site.id === siteId ? { ...site, photo_url: serializePhotoUrls(urls) } : site))))
+  }
 
   const exportCsv = () => {
     const allObsKeys = [
@@ -116,7 +132,7 @@ export default function ValidationPage() {
               disabled={observations.length === 0 && sites.length === 0}
               className="px-3 py-2 rounded-xl text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:pointer-events-none"
             >
-              Exporter en CSV
+              Exporter en .csv
             </button>
           </div>
           <div className="flex border-t border-gray-200 dark:border-gray-700">
@@ -172,7 +188,12 @@ export default function ValidationPage() {
                             <div className="flex gap-1 flex-wrap">
                               {urls.map((url, i) => (
                                 <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-12 h-12 rounded overflow-hidden bg-gray-100 dark:bg-gray-700 shrink-0">
-                                  <img src={url} alt="" className="w-full h-full object-cover" />
+                                  <img
+                                    src={url}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                    onError={() => o.id && handleObservationPhotoError(o.id, url)}
+                                  />
                                 </a>
                               ))}
                             </div>
@@ -227,7 +248,12 @@ export default function ValidationPage() {
                             <div className="flex gap-1 flex-wrap">
                               {urls.map((url, i) => (
                                 <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-12 h-12 rounded overflow-hidden bg-gray-100 dark:bg-gray-700 shrink-0">
-                                  <img src={url} alt="" className="w-full h-full object-cover" />
+                                  <img
+                                    src={url}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                    onError={() => handleSitePhotoError(s.id, url)}
+                                  />
                                 </a>
                               ))}
                             </div>

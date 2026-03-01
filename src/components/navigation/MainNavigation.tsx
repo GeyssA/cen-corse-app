@@ -73,7 +73,9 @@ const MainNavigation = memo(function MainNavigation() {
       theme === 'light' 
         ? 'bg-white/80 border-gray-200' 
         : 'glass-effect border-white/10'
-    }`}>
+    }`}
+    style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+    >
       <div className="max-w-md mx-auto px-2 py-2">
         <div className="flex w-full">
           {navigationTabs.map((tab) => {

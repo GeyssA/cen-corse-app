@@ -28,10 +28,10 @@ interface MapLinePickModalProps {
   isOpen: boolean
   onClose: () => void
   onConfirm: (result: LinePickResult) => void
-  /** Centre initial de la carte (optionnel). */
   initialCenter?: [number, number]
-  /** Tracé existant pour édition (optionnel). */
   initialPath?: [number, number][]
+  existingPoints?: import('./MapPickContent').ExistingMapPoint[]
+  existingPointsLoaded?: boolean
 }
 
 export default function MapLinePickModal({
@@ -39,7 +39,9 @@ export default function MapLinePickModal({
   onClose,
   onConfirm,
   initialCenter,
-  initialPath
+  initialPath,
+  existingPoints,
+  existingPointsLoaded
 }: MapLinePickModalProps) {
   const { theme } = useTheme()
   const [path, setPath] = useState<[number, number][]>([])
@@ -138,6 +140,8 @@ export default function MapLinePickModal({
           initialCenter={initialCenter ?? CORSICA_CENTER}
           path={path}
           onPathChange={setPath}
+          existingPoints={existingPoints}
+          existingPointsLoaded={existingPointsLoaded}
         />
       </div>
 

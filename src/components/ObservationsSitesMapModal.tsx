@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { getObservationsByUser } from '@/lib/observations'
 import { getSitesByUser } from '@/lib/sites'
 import { getCurrentPositionAsync } from '@/lib/geolocation'
+import { getCachedMapData, setCachedMapData } from '@/lib/mapDataCache'
 import type { Observation } from '@/lib/observations'
 import type { ObservationSite } from '@/lib/sites'
 import dynamic from 'next/dynamic'
@@ -15,7 +16,7 @@ const DEFAULT_ZOOM = 8
 
 type MapPoint =
   | { type: 'user'; id: string; latitude: number; longitude: number; label?: string }
-  | { type: 'site'; id: string; latitude: number; longitude: number; nom_du_site: string; protocole: string; date?: string }
+  | { type: 'site'; id: string; latitude: number; longitude: number; nom_du_site: string; protocole: string; date?: string; path_coordinates?: [number, number][] }
   | { type: 'observation'; id: string; latitude: number; longitude: number; date: string; nom_espece: string; site: string; protocole?: string; groupe?: string; effectif?: string; stade?: string; sexe?: string; remarques?: string; observateur?: string }
 
 // Carte Leaflet chargée côté client uniquement (évite erreurs SSR)
@@ -27,6 +28,11 @@ const LeafletMap = dynamic(() => import('./ObservationsSitesMapLeaflet'), {
     </div>
   )
 })
+
+/** Précharge le chunk Leaflet pour ouvrir la carte plus vite au clic. */
+export function preloadMapChunk(): void {
+  import('./ObservationsSitesMapLeaflet')
+}
 
 interface ObservationsSitesMapModalProps {
   isOpen: boolean
@@ -46,11 +52,26 @@ export default function ObservationsSitesMapModal({ isOpen, onClose }: Observati
     setLoading(true)
     setError(null)
     try {
-      const [observations, sites] = await Promise.all([
-        getObservationsByUser(user.id),
-        getSitesByUser(user.id)
-      ])
-      const userPos = await getCurrentPositionAsync().catch(() => null)
+      const cached = getCachedMapData(user.id)
+      let observations: Observation[]
+      let sites: ObservationSite[]
+      let userPos: { latitude: number; longitude: number } | null = null
+
+      if (cached) {
+        observations = cached.observations
+        sites = cached.sites as (ObservationSite & { path_coordinates?: [number, number][] | null })[]
+        userPos = await getCurrentPositionAsync().catch(() => null)
+      } else {
+        const [obsResult, sitesResult, posResult] = await Promise.all([
+          getObservationsByUser(user.id),
+          getSitesByUser(user.id),
+          getCurrentPositionAsync().catch((): null => null)
+        ])
+        observations = obsResult
+        sites = sitesResult as (ObservationSite & { path_coordinates?: [number, number][] | null })[]
+        userPos = posResult
+        setCachedMapData(user.id, { observations, sites })
+      }
 
       const newPoints: MapPoint[] = []
       if (userPos) {
@@ -62,20 +83,26 @@ export default function ObservationsSitesMapModal({ isOpen, onClose }: Observati
           label: 'Ma position'
         })
       }
-      ;(sites as (ObservationSite & { latitude?: number | null; longitude?: number | null })[]).forEach((s) => {
-        if (s.latitude != null && s.longitude != null) {
-          newPoints.push({
+      sites.forEach((s) => {
+        const lat = s.latitude ?? (s.path_coordinates?.[0]?.[0])
+        const lng = s.longitude ?? (s.path_coordinates?.[0]?.[1])
+        if (lat != null && lng != null) {
+          const sitePoint: Extract<MapPoint, { type: 'site' }> = {
             type: 'site',
             id: s.id,
-            latitude: s.latitude,
-            longitude: s.longitude,
+            latitude: lat,
+            longitude: lng,
             nom_du_site: s.nom_du_site,
             protocole: s.protocole,
             date: s.date
-          })
+          }
+          if (s.path_coordinates && s.path_coordinates.length >= 2) {
+            sitePoint.path_coordinates = s.path_coordinates
+          }
+          newPoints.push(sitePoint)
         }
       })
-      ;(observations as Observation[]).forEach((o) => {
+      ;observations.forEach((o) => {
         if (o.latitude != null && o.longitude != null) {
           newPoints.push({
             type: 'observation',

@@ -82,7 +82,7 @@ export default function Modal({
           ref={modalRef}
           className={`
             relative w-full ${sizeClasses[size]} 
-            bg-white rounded-xl shadow-2xl
+            bg-white rounded-lg shadow-2xl
             transform transition-all duration-300 ease-out
             animate-slide-up
             ${className}

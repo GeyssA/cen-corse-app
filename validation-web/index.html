@@ -63,9 +63,8 @@
               <option value="all">Tout</option>
               <option value="validated">Validées uniquement</option>
             </select>
-            <button type="button" class="btn btn-outline" id="btnExportAll" title="Exporter toutes les données en CSV">Exporter tout (CSV)</button>
-            <button type="button" class="btn btn-success" id="btnExportValidated" title="Exporter uniquement les données validées">Exporter validées (CSV)</button>
-            <button type="button" class="btn btn-ghost" id="btnLogout">Fermer la session</button>
+            <button type="button" class="btn btn-outline" id="btnExportAll" title="Exporter toutes les données en .csv">Exporter tout (.csv)</button>
+            <button type="button" class="btn btn-success" id="btnExportValidated" title="Exporter uniquement les données validées">Exporter validées (.csv)</button>
           </div>
         </div>
 
@@ -85,9 +84,17 @@
                   <option value="observateur">Observateur</option>
                   <option value="remarques">Remarques</option>
                 </select>
-                <input type="search" id="searchObs" class="search-input" placeholder="Rechercher…" list="searchObsSuggestions" autocomplete="off" />
+                <div class="search-input-wrap">
+                  <input type="search" id="searchObs" class="search-input" placeholder="Rechercher…" list="searchObsSuggestions" autocomplete="off" />
+                  <button type="button" class="search-clear" id="searchObsClear" aria-label="Supprimer le filtre" aria-hidden="true">×</button>
+                </div>
                 <datalist id="searchObsSuggestions"></datalist>
                 <button type="button" class="btn btn-outline btn-sm" id="btnShowObsOnMap">Voir sur la carte</button>
+              </div>
+              <div class="selection-toolbar" data-type="observation">
+                <button type="button" class="btn btn-ghost btn-sm" id="btnObsSelectAll">Tout sélectionner</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btnObsDeselectAll">Tout désélectionner</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btnObsInvert">Inverser la sélection</button>
               </div>
             </div>
             <div class="table-wrapper table-wrapper-integrated">
@@ -107,9 +114,17 @@
                   <option value="protocole">Protocole</option>
                   <option value="date">Date</option>
                 </select>
-                <input type="search" id="searchSites" class="search-input" placeholder="Rechercher…" list="searchSitesSuggestions" autocomplete="off" />
+                <div class="search-input-wrap">
+                  <input type="search" id="searchSites" class="search-input" placeholder="Rechercher…" list="searchSitesSuggestions" autocomplete="off" />
+                  <button type="button" class="search-clear" id="searchSitesClear" aria-label="Supprimer le filtre" aria-hidden="true">×</button>
+                </div>
                 <datalist id="searchSitesSuggestions"></datalist>
                 <button type="button" class="btn btn-outline btn-sm" id="btnShowSitesOnMap">Voir sur la carte</button>
+              </div>
+              <div class="selection-toolbar" data-type="site">
+                <button type="button" class="btn btn-ghost btn-sm" id="btnSiteSelectAll">Tout sélectionner</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btnSiteDeselectAll">Tout désélectionner</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btnSiteInvert">Inverser la sélection</button>
               </div>
             </div>
             <div class="table-wrapper table-wrapper-integrated">
@@ -131,11 +146,12 @@
                   <option value="topo">Topographique</option>
                   <option value="dark">Sombre</option>
                 </select>
+                <button type="button" class="btn btn-primary btn-sm" id="btnZoomToSelection" title="Zoomer sur les éléments visibles">Zoomer sur la sélection</button>
+                <span id="mapVisibleCount" class="map-visible-count" aria-live="polite">0 observations, 0 sites visibles</span>
               </div>
               <div class="map-layer-toggles">
                 <label class="map-checkbox-label"><input type="checkbox" id="mapShowObs" checked /> <span class="legend-dot obs"></span> Observations</label>
                 <label class="map-checkbox-label"><input type="checkbox" id="mapShowSites" checked /> <span class="legend-dot site"></span> Sites</label>
-                <label class="map-checkbox-label"><input type="checkbox" id="mapShowSitesLine" checked /> <span class="legend-dot line"></span> Linéaires</label>
               </div>
             </div>
             <div id="map" class="map-container map-container-integrated"></div>
@@ -175,6 +191,18 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="config.js"></script>
+  <script>
+    // Détecter ouverture en file:// : les modules ES ne fonctionnent pas, le formulaire ne réagira pas
+    if (window.location.protocol === 'file:') {
+      document.body.insertAdjacentHTML('afterbegin',
+        '<div style="position:fixed;inset:0;z-index:9999;background:#1e293b;color:#f8fafc;display:flex;align-items:center;justify-content:center;padding:1.5rem;text-align:center;">' +
+        '<div style="max-width:420px;">' +
+        '<p style="font-size:1.1rem;margin-bottom:1rem;">Cette page doit être ouverte via un serveur HTTP en local, pas en double-cliquant sur le fichier.</p>' +
+        '<p style="margin-bottom:1rem;">Depuis la racine du projet, lancez&nbsp;: <code style="background:#334155;padding:.2em .5em;border-radius:4px;">npx serve validation-web -p 5000</code></p>' +
+        '<p>Puis ouvrez <strong>http://localhost:5000</strong> dans le navigateur.</p>' +
+        '</div></div>');
+    }
+  </script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

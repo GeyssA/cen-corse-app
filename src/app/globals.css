@@ -9,6 +9,13 @@
   animation: scroll-logos 30s linear infinite;
 }
 
+/* Safe-area : ne pas recouvrir la barre système (haut) ni la zone des boutons (bas) */
+.scroll-container {
+  padding-top: env(safe-area-inset-top, 0px);
+  /* Réserve pour la barre de navigation fixe + marge lisible au-dessus */
+  padding-bottom: calc(9rem + env(safe-area-inset-bottom, 0px));
+}
+
 /* Désactiver le pull-to-refresh et le zoom sur PWA */
 html, body {
   overscroll-behavior: none;

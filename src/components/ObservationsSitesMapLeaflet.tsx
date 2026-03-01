@@ -1,9 +1,12 @@
 'use client'
 
-import React, { useEffect, useMemo } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import React, { useEffect, useMemo, useState } from 'react'
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { watchPosition } from '@/lib/geolocation'
+import { createUserPositionIcon, createCircleIcon } from '@/lib/mapIcons'
+import { MapScale, MapLegend } from '@/components/MapControls'
 import type { MapPoint } from './ObservationsSitesMapModal'
 
 // Fix des icônes Leaflet avec Next.js / webpack
@@ -14,37 +17,27 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png'
 })
 
-// Marqueurs personnalisés (couleur + taille : sites plus grands, observations plus petits)
-function createCustomIcon(color: string, sizePx: number) {
-  const half = sizePx / 2
-  return L.divIcon({
-    className: 'custom-marker',
-    html: `<div style="
-      width: ${sizePx}px; height: ${sizePx}px;
-      background: ${color};
-      border: 2px solid white;
-      border-radius: 50%;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-    "></div>`,
-    iconSize: [sizePx, sizePx],
-    iconAnchor: [half, half]
-  })
-}
-
-const USER_ICON = createCustomIcon('#3b82f6', 24)   // blue
-const SITE_ICON = createCustomIcon('#10b981', 22)  // emerald, légèrement plus grand
-const OBS_ICON = createCustomIcon('#f59e0b', 16)   // amber, plus petit (observations)
+const USER_ICON = createUserPositionIcon()
+const SITE_ICON = createCircleIcon('#10b981', 22)
+const OBS_ICON = createCircleIcon('#f59e0b', 16)
 
 /** Clé pour grouper les points au même endroit (arrondi ~10 m) */
 function locationKey(lat: number, lng: number, decimals = 5): string {
   return `${lat.toFixed(decimals)}_${lng.toFixed(decimals)}`
 }
 
-/** Répartit les points qui se superposent sur un petit cercle pour tous les voir */
+/** Répartit les points qui se superposent sur un petit cercle pour tous les voir. Les sites linéaires sont exclus (tracés à part). */
 function spreadOverlappingPoints(points: MapPoint[]): { point: MapPoint; displayLat: number; displayLng: number }[] {
-  const radiusDeg = 0.00012 // ~12 m en degrés, moins décalé pour les points d'obs
+  const pointLike = points.filter((p) => {
+    if (p.type === 'site') {
+      const path = (p as { path_coordinates?: [number, number][] }).path_coordinates
+      return !path || path.length < 2
+    }
+    return true
+  })
+  const radiusDeg = 0.00012
   const groups = new Map<string, MapPoint[]>()
-  for (const p of points) {
+  for (const p of pointLike) {
     const key = locationKey(p.latitude, p.longitude)
     if (!groups.has(key)) groups.set(key, [])
     groups.get(key)!.push(p)
@@ -70,11 +63,14 @@ function spreadOverlappingPoints(points: MapPoint[]): { point: MapPoint; display
 
 function FitBounds({ positions }: { positions: [number, number][] }) {
   const map = useMap()
+  const length = positions.length
+  const positionsRef = React.useRef(positions)
+  positionsRef.current = positions
   useEffect(() => {
-    if (positions.length === 0) return
-    const bounds = L.latLngBounds(positions)
+    if (length === 0) return
+    const bounds = L.latLngBounds(positionsRef.current)
     map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 })
-  }, [map, positions])
+  }, [map, length])
   return null
 }
 
@@ -86,22 +82,74 @@ interface ObservationsSitesMapLeafletProps {
 const DEFAULT_ZOOM = 8
 
 export default function ObservationsSitesMapLeaflet({ points, initialCenter }: ObservationsSitesMapLeafletProps) {
+  const [livePosition, setLivePosition] = useState<[number, number] | null>(null)
+
+  useEffect(() => {
+    const unsubscribe = watchPosition(
+      (pos) => setLivePosition([pos.latitude, pos.longitude]),
+      () => setLivePosition(null)
+    )
+    return unsubscribe
+  }, [])
+
   const spreadPoints = useMemo(() => spreadOverlappingPoints(points), [points])
-  const boundsPositions = useMemo(() => spreadPoints.map((s) => [s.displayLat, s.displayLng] as [number, number]), [spreadPoints])
+  const linearSites = useMemo(() =>
+    points.filter((p): p is MapPoint & { type: 'site'; path_coordinates: [number, number][] } =>
+      p.type === 'site' && !!(p as { path_coordinates?: [number, number][] }).path_coordinates && (p as { path_coordinates: [number, number][] }).path_coordinates.length >= 2
+    ),
+    [points]
+  )
+  const boundsPositions = useMemo(() => {
+    const fromPoints = spreadPoints.map((s) => [s.displayLat, s.displayLng] as [number, number])
+    linearSites.forEach((s) => s.path_coordinates.forEach((pt) => fromPoints.push(pt)))
+    if (livePosition) return [...fromPoints, livePosition]
+    return fromPoints
+  }, [spreadPoints, linearSites, livePosition])
+
+  const pointsToShow = useMemo(() => {
+    if (!livePosition) return spreadPoints
+    return spreadPoints.filter((s) => s.point.type !== 'user')
+  }, [spreadPoints, livePosition])
 
   return (
-    <MapContainer
-      center={initialCenter}
-      zoom={DEFAULT_ZOOM}
-      className="w-full h-full z-0"
-      scrollWheelZoom
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      {boundsPositions.length > 0 && <FitBounds positions={boundsPositions} />}
-      {spreadPoints.map(({ point, displayLat, displayLng }) => {
+    <div className="relative w-full h-full">
+      <MapContainer
+        center={initialCenter}
+        zoom={DEFAULT_ZOOM}
+        className="w-full h-full z-0"
+        scrollWheelZoom
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        <MapScale />
+        {boundsPositions.length > 0 && <FitBounds positions={boundsPositions} />}
+      {livePosition && (
+        <Marker position={livePosition} icon={USER_ICON}>
+          <Popup closeButton>
+            <div className="p-1 min-w-[140px] text-sm">
+              <p className="font-semibold text-blue-600">Ma position</p>
+              <p className="text-xs text-gray-500">Position GPS actuelle</p>
+            </div>
+          </Popup>
+        </Marker>
+      )}
+      {linearSites.map((site) => {
+        const pathPositions = site.path_coordinates.map((pt) => [pt[0], pt[1]] as [number, number])
+        return (
+          <Polyline key={`site-line-${site.id}`} positions={pathPositions} pathOptions={{ color: '#10b981', weight: 4 }}>
+            <Popup closeButton>
+              <div className="p-2 min-w-[200px] text-sm space-y-1.5">
+                <p className="font-semibold text-emerald-800 border-b border-emerald-200 pb-1">Site linéaire – {site.nom_du_site}</p>
+                <p className="text-gray-600"><span className="font-medium">Protocole :</span> {site.protocole}</p>
+                {site.date && <p className="text-gray-500 text-xs">Créé le {site.date}</p>}
+              </div>
+            </Popup>
+          </Polyline>
+        )
+      })}
+      {pointsToShow.map(({ point, displayLat, displayLng }) => {
         const icon =
           point.type === 'user' ? USER_ICON :
           point.type === 'site' ? SITE_ICON : OBS_ICON
@@ -148,6 +196,8 @@ export default function ObservationsSitesMapLeaflet({ points, initialCenter }: O
           </Marker>
         )
       })}
-    </MapContainer>
+      </MapContainer>
+      <MapLegend dark />
+    </div>
   )
 }

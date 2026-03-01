@@ -34,8 +34,12 @@ export const metadata: Metadata = {
     title: "CEN Corse",
   },
   icons: {
-    icon: "/logo_pwa_format.png",
-    apple: "/logo_pwa_format.png",
+    icon: [
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon.ico', sizes: 'any' },
+    ],
+    apple: '/apple-touch-icon.png',
   },
 };
 
@@ -51,7 +55,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="CEN Corse" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="theme-color" content="#1a1a1a" />
+        <meta name="theme-color" content="#1e3a8a" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="msapplication-tap-highlight" content="no" />

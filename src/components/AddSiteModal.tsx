@@ -3,7 +3,9 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
-import { createSite } from '@/lib/sites'
+import { createSite, getSitesByUser } from '@/lib/sites'
+import { invalidateMapDataCache } from '@/lib/mapDataCache'
+import { getObservationsByUser } from '@/lib/observations'
 import { uploadPhoto } from '@/lib/uploadPhoto'
 import { serializePhotoUrls, MAX_PHOTOS } from '@/lib/photoUrls'
 import { getCurrentPositionAsync, isCapacitorNative, type GeoError } from '@/lib/geolocation'
@@ -51,6 +53,65 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
   const [lengthMeters, setLengthMeters] = useState<number | null>(null)
   /** 'point' | 'linear' pour POP Reptile uniquement. */
   const [sitePositionType, setSitePositionType] = useState<'point' | 'linear'>('point')
+  const [existingMapPoints, setExistingMapPoints] = useState<import('./MapPickContent').ExistingMapPoint[]>([])
+  const [existingPointsLoaded, setExistingPointsLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!isOpen || !user?.id) {
+      setExistingPointsLoaded(false)
+      return
+    }
+    setExistingPointsLoaded(false)
+    Promise.all([getSitesByUser(user.id), getObservationsByUser(user.id)])
+      .then(([sites, observations]) => {
+        const points: import('./MapPickContent').ExistingMapPoint[] = []
+        sites.forEach((s) => {
+          const lat = s.latitude ?? (s.path_coordinates?.[0]?.[0])
+          const lng = s.longitude ?? (s.path_coordinates?.[0]?.[1])
+          if (lat != null && lng != null) {
+            const point: import('./MapPickContent').ExistingMapPoint = {
+              type: 'site',
+              id: s.id,
+              latitude: lat,
+              longitude: lng,
+              nom_du_site: s.nom_du_site,
+              date: s.date,
+              protocole: s.protocole
+            }
+            if (s.path_coordinates && s.path_coordinates.length >= 2) {
+              point.path_coordinates = s.path_coordinates
+            }
+            points.push(point)
+          }
+        })
+        observations.forEach((o) => {
+          if (o.latitude != null && o.longitude != null) {
+            points.push({
+              type: 'observation',
+              id: o.id ?? `${o.site}-${o.date}`,
+              latitude: o.latitude,
+              longitude: o.longitude,
+              nom_espece: o.nom_espece,
+              date: o.date,
+              protocole: o.protocole,
+              site: o.site,
+              groupe: o.groupe,
+              effectif: o.effectif,
+              stade: o.stade,
+              sexe: o.sexe,
+              remarques: o.remarques,
+              observateur: o.observateur
+            })
+          }
+        })
+        setExistingMapPoints(points)
+        setExistingPointsLoaded(true)
+      })
+      .catch(() => {
+        setExistingMapPoints([])
+        setExistingPointsLoaded(true)
+      })
+  }, [isOpen, user?.id])
 
   useEffect(() => {
     if (!protocoleOpen) return
@@ -181,6 +242,7 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
         length_meters: isLinear ? lengthMeters! : null
       })
       if (created) {
+        invalidateMapDataCache()
         onSuccess?.()
         onClose()
       } else {
@@ -198,7 +260,7 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div
-        className={`relative w-full max-w-xl max-h-[88vh] overflow-y-auto rounded-2xl shadow-xl border ${
+        className={`relative w-full max-w-xl max-h-[88vh] overflow-y-auto rounded-lg shadow-xl border ${
           isLight ? 'bg-white border-gray-200' : 'bg-gray-900 border-gray-700'
         }`}
       >
@@ -571,6 +633,8 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
         isOpen={showMapPicker}
         onClose={() => setShowMapPicker(false)}
         initialCenter={latitude != null && longitude != null ? [latitude, longitude] : undefined}
+        existingPoints={existingMapPoints}
+        existingPointsLoaded={existingPointsLoaded}
         onPick={(lat, lng) => {
           setLatitude(lat)
           setLongitude(lng)
@@ -589,6 +653,8 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
               : undefined) as [number, number] | undefined
         }
         initialPath={pathCoordinates ?? undefined}
+        existingPoints={existingMapPoints}
+        existingPointsLoaded={existingPointsLoaded}
         onConfirm={({ path, lengthMeters: len }) => {
           setPathCoordinates(path)
           setLengthMeters(len)

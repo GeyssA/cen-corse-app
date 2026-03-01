@@ -81,3 +81,53 @@ export async function getCurrentPositionAsync(): Promise<GeoPosition> {
     )
   })
 }
+
+/**
+ * Abonnement à la position en continu (pour afficher "Ma position" sur la carte).
+ * Retourne une fonction pour annuler l'abonnement.
+ */
+export function watchPosition(
+  onPosition: (pos: GeoPosition) => void,
+  onError?: (err: GeoError) => void
+): () => void {
+  if (typeof window === 'undefined') return () => {}
+
+  const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor
+  const isNative = cap?.isNativePlatform?.() === true
+
+  if (isNative) {
+    let cancelled = false
+    const poll = async () => {
+      if (cancelled) return
+      try {
+        const { Geolocation } = await import('@capacitor/geolocation')
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 5000
+        })
+        if (!cancelled) onPosition({ latitude: pos.coords.latitude, longitude: pos.coords.longitude })
+      } catch {
+        // ignore
+      }
+      if (!cancelled) setTimeout(poll, 5000)
+    }
+    poll()
+    return () => { cancelled = true }
+  }
+
+  if (!navigator.geolocation) return () => {}
+  const id = navigator.geolocation.watchPosition(
+    (pos) => onPosition({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+    (err: GeolocationPositionError) => {
+      const code = err.code as 1 | 2 | 3
+      const message =
+        code === 1 ? 'Autorisez l’accès à la position.'
+        : code === 2 ? 'Position indisponible.'
+        : 'Délai dépassé.'
+      onError?.({ code, message } as GeoError)
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+  )
+  return () => navigator.geolocation.clearWatch(id)
+}

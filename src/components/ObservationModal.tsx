@@ -6,7 +6,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { createObservation } from '@/lib/observations'
 import { uploadPhoto } from '@/lib/uploadPhoto'
 import { serializePhotoUrls, MAX_PHOTOS } from '@/lib/photoUrls'
-import { getSitesByUserAndProtocole, type ObservationSite } from '@/lib/sites'
+import { getSitesByUserAndProtocole, getSitesByUser, type ObservationSite } from '@/lib/sites'
+import { getObservationsByUser } from '@/lib/observations'
 import { getCurrentPositionAsync, isCapacitorNative, type GeoError } from '@/lib/geolocation'
 import MapPickModal from '@/components/MapPickModal'
 
@@ -149,6 +150,8 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
   const [showSuccessCheck, setShowSuccessCheck] = useState(false)
   const [successFadeOut, setSuccessFadeOut] = useState(false)
   const [showMapPicker, setShowMapPicker] = useState(false)
+  const [existingMapPoints, setExistingMapPoints] = useState<import('./MapPickContent').ExistingMapPoint[]>([])
+  const [existingPointsLoaded, setExistingPointsLoaded] = useState(false)
   const [photoItems, setPhotoItems] = useState<Array<{ file: File; preview: string }>>([])
   const photoInputRef = useRef<HTMLInputElement>(null)
   const photoCameraRef = useRef<HTMLInputElement>(null)
@@ -284,6 +287,64 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
     getSitesByUserAndProtocole(user.id, form.protocole).then(setSites)
   }, [user?.id, form.protocole, isOpen, sitesRefreshKey])
 
+  // Charger sites + observations pour afficher sur la carte (choix de position)
+  useEffect(() => {
+    if (!isOpen || !user?.id) {
+      setExistingPointsLoaded(false)
+      return
+    }
+    setExistingPointsLoaded(false)
+    Promise.all([getSitesByUser(user.id), getObservationsByUser(user.id)])
+      .then(([sitesList, observationsList]) => {
+        const points: import('./MapPickContent').ExistingMapPoint[] = []
+        sitesList.forEach((s) => {
+          const lat = s.latitude ?? (s.path_coordinates?.[0]?.[0])
+          const lng = s.longitude ?? (s.path_coordinates?.[0]?.[1])
+          if (lat != null && lng != null) {
+            const point: import('./MapPickContent').ExistingMapPoint = {
+              type: 'site',
+              id: s.id,
+              latitude: lat,
+              longitude: lng,
+              nom_du_site: s.nom_du_site,
+              date: s.date,
+              protocole: s.protocole
+            }
+            if (s.path_coordinates && s.path_coordinates.length >= 2) {
+              point.path_coordinates = s.path_coordinates
+            }
+            points.push(point)
+          }
+        })
+        observationsList.forEach((o) => {
+          if (o.latitude != null && o.longitude != null) {
+            points.push({
+              type: 'observation',
+              id: o.id ?? `${o.site}-${o.date}`,
+              latitude: o.latitude,
+              longitude: o.longitude,
+              nom_espece: o.nom_espece,
+              date: o.date,
+              protocole: o.protocole,
+              site: o.site,
+              groupe: o.groupe,
+              effectif: o.effectif,
+              stade: o.stade,
+              sexe: o.sexe,
+              remarques: o.remarques,
+              observateur: o.observateur
+            })
+          }
+        })
+        setExistingMapPoints(points)
+        setExistingPointsLoaded(true)
+      })
+      .catch(() => {
+        setExistingMapPoints([])
+        setExistingPointsLoaded(true)
+      })
+  }, [isOpen, user?.id])
+
   // Réinitialiser le formulaire à l'ouverture. En app (Capacitor) : récup auto de la position (après 1ère autorisation). En run dev (navigateur) : pas d'auto pour éviter le refus silencieux — l'utilisateur clique sur le bouton.
   useEffect(() => {
     if (!isOpen) return
@@ -409,6 +470,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
           return []
         })
         onSuccess?.()
+        invalidateMapDataCache()
         // Ne pas fermer : l'utilisateur peut enchaîner une autre donnée sur le même point
       } else {
         setSubmitError('Impossible d’enregistrer l’observation. Vérifiez la configuration Supabase.')
@@ -436,7 +498,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
     <>
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div
-        className={`relative w-full max-w-2xl max-h-[88vh] overflow-y-auto rounded-2xl shadow-xl border ${
+        className={`relative w-full max-w-2xl max-h-[88vh] overflow-y-auto rounded-lg shadow-xl border ${
           isLight ? 'bg-white border-gray-200' : 'bg-gray-900 border-gray-700'
         }`}
       >
@@ -1305,7 +1367,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
               aria-live="polite"
             >
               <div
-                className={`flex flex-col items-center gap-3 rounded-2xl px-8 py-6 shadow-xl ${
+                className={`flex flex-col items-center gap-3 rounded-lg px-8 py-6 shadow-xl ${
                   isLight ? 'bg-white text-emerald-600' : 'bg-gray-800 text-emerald-400'
                 }`}
               >
@@ -1347,6 +1409,9 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
     <MapPickModal
       isOpen={showMapPicker}
       onClose={() => setShowMapPicker(false)}
+      initialCenter={latitude != null && longitude != null ? [latitude, longitude] : undefined}
+      existingPoints={existingMapPoints}
+      existingPointsLoaded={existingPointsLoaded}
       onPick={(lat, lng) => {
         setLatitude(lat)
         setLongitude(lng)

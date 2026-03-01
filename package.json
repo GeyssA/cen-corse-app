@@ -21,6 +21,7 @@
     "analyze:performance": "node scripts/analyze-performance.js",
     "fix:eslint": "npm run lint -- --fix",
     "optimize:all": "npm run optimize:images && npm run fix:eslint && npm run build",
+    "generate-favicon": "node scripts/generate-favicon.js",
     "preview": "next build && next start",
     "build:capacitor": "node scripts/prepare-capacitor-build.js && node scripts/inject-capacitor-fixes.js && npx cross-env CAPACITOR_BUILD=true npm run build && node scripts/restore-api-routes.js && node scripts/revert-capacitor-fixes.js && npx cap sync android",
     "build:apk": "npm run build:capacitor && node scripts/build-android-release.js assembleRelease",

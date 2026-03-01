@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { serializePhotoUrls } from './photoUrls'
 
 export interface Observation {
   id?: string
@@ -88,5 +89,24 @@ export async function setObservationValidated(id: string, validated: boolean): P
   } catch (e) {
     console.error('Erreur inattendue validation observation:', e)
     return false
+  }
+}
+
+/** Met à jour les URLs de photos d'une observation (ex. après suppression dans le bucket). Passez la liste des URLs encore valides, ou [] pour tout retirer. */
+export async function updateObservationPhotoUrls(
+  observationId: string,
+  urls: string[]
+): Promise<{ error: Error | null }> {
+  try {
+    const photo_url = serializePhotoUrls(urls)
+    const { error } = await supabase
+      .from('observations')
+      .update({ photo_url })
+      .eq('id', observationId)
+    return { error: error ? new Error(error.message) : null }
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error(String(e))
+    console.error('Erreur mise à jour photo_url observation:', e)
+    return { error: err }
   }
 }

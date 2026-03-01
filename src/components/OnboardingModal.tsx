@@ -126,7 +126,7 @@ export default function OnboardingModal({ isOpen, onClose, userId }: OnboardingM
         
         {/* Modal content */}
         <div 
-          className={`relative max-w-lg w-full backdrop-blur-md rounded-2xl overflow-hidden shadow-2xl ${
+          className={`relative max-w-lg w-full backdrop-blur-md rounded-lg overflow-hidden shadow-2xl ${
             theme === 'light' 
               ? 'bg-white/95 border border-gray-200/50' 
               : 'bg-gray-900/95 border border-white/20'

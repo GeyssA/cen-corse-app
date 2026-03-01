@@ -76,6 +76,7 @@ body {
 }
 .logo {
   margin: 0;
+  margin-top: 0.2rem;
   font-family: var(--font-title);
   font-size: 1.5rem;
   font-weight: 400;
@@ -367,18 +368,103 @@ body {
   flex-wrap: wrap;
   margin-left: auto;
 }
+.selection-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--primary);
+  background: rgba(14, 165, 233, 0.08);
+}
+.selection-toolbar::before {
+  content: 'Sélection';
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--primary);
+  display: block;
+  width: 100%;
+  margin-bottom: 0.35rem;
+}
+.selection-toolbar[data-type="observation"]::before { content: 'Sélection des observations'; }
+.selection-toolbar[data-type="site"]::before { content: 'Sélection des sites'; }
+.selection-toolbar .btn {
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.875rem;
+}
+.selection-toolbar .btn:hover { background: rgba(14, 165, 233, 0.2); color: var(--text); }
 .search-input {
-  padding: 0.5rem 0.875rem;
+  padding: 0.5rem 2.25rem 0.5rem 0.875rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-input);
   color: var(--text);
   font-size: 0.875rem;
   font-family: var(--font);
-  min-width: 220px;
-  max-width: 320px;
+  min-width: 280px;
+  max-width: 520px;
+  flex: 1;
+}
+.search-input-wrap {
+  display: flex;
+  align-items: center;
+  position: relative;
+  min-width: 280px;
+  max-width: 520px;
+  flex: 1;
+}
+.search-input-wrap .search-input {
+  min-width: 0;
+  max-width: none;
+  width: 100%;
+}
+.search-clear {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--danger);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.search-clear:hover {
+  background: rgba(244, 63, 94, 0.2);
+  color: #ff6b8a;
+}
+.search-clear:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.35);
+}
+.search-clear[aria-hidden="true"] {
+  visibility: hidden;
+  pointer-events: none;
 }
 .search-input::placeholder { color: var(--text-muted); }
+/* Masquer la flèche native du champ (datalist / type search) */
+.search-input::-webkit-calendar-picker-indicator,
+.search-input::-webkit-list-button {
+  display: none;
+  opacity: 0;
+  pointer-events: none;
+}
 .search-input:focus {
   outline: none;
   border-color: var(--primary);
@@ -409,6 +495,16 @@ body {
   font-size: 0.875rem;
   background: var(--bg-input);
   color: var(--text);
+}
+.map-visible-count {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0.4rem 0.75rem;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  margin-left: auto;
 }
 .map-layer-toggles {
   display: flex;
@@ -532,6 +628,10 @@ body {
 .cell-numeric { font-family: ui-monospace, 'SF Mono', monospace; font-size: 0.8125rem; }
 .cell-date { font-size: 0.875rem; color: var(--text-muted); }
 .cell-actions { white-space: nowrap; }
+.data-table .cell-select { width: 2.75rem; text-align: center; vertical-align: middle; }
+.data-table .cell-select input[type="checkbox"] { cursor: pointer; width: 1.1rem; height: 1.1rem; accent-color: var(--primary); }
+.data-table tbody tr.selected { background: rgba(14, 165, 233, 0.2); box-shadow: inset 3px 0 0 var(--primary); }
+.data-table tbody tr.selected:hover { background: rgba(14, 165, 233, 0.26); }
 
 /* ===== Map intégrée ===== */
 .map-container-integrated {
@@ -722,6 +822,7 @@ body {
   .data-table { min-width: 600px; }
   .panel-toolbar { margin-left: 0; width: 100%; }
   .search-input { max-width: 100%; min-width: 0; }
+  .search-input-wrap { max-width: 100%; min-width: 0; }
   .logo-bg { padding: 0.35rem 0.75rem; }
   .gate-logo-bg { padding: 0.75rem 1rem; }
   .gate-logo { height: 48px; }

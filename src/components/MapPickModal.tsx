@@ -15,11 +15,12 @@ interface MapPickModalProps {
   isOpen: boolean
   onClose: () => void
   onPick: (lat: number, lng: number) => void
-  /** Centre initial de la carte (optionnel). */
   initialCenter?: [number, number]
+  existingPoints?: import('./MapPickContent').ExistingMapPoint[]
+  existingPointsLoaded?: boolean
 }
 
-export default function MapPickModal({ isOpen, onClose, onPick, initialCenter }: MapPickModalProps) {
+export default function MapPickModal({ isOpen, onClose, onPick, initialCenter, existingPoints, existingPointsLoaded }: MapPickModalProps) {
   const { theme } = useTheme()
   const [position, setPosition] = useState<[number, number] | null>(null)
   const isLight = theme === 'light'
@@ -61,6 +62,8 @@ export default function MapPickModal({ isOpen, onClose, onPick, initialCenter }:
           initialCenter={initialCenter ?? CORSICA_CENTER}
           position={position}
           onPositionChange={setPosition}
+          existingPoints={existingPoints}
+          existingPointsLoaded={existingPointsLoaded}
         />
       </div>
       <div className={`shrink-0 p-4 border-t flex gap-3 ${isLight ? 'bg-white border-gray-200' : 'bg-gray-900 border-gray-700'}`}>

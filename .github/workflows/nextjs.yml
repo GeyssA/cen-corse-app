@@ -33,6 +33,12 @@ jobs:
         run: |
           mkdir -p .public
           cp validation-web/index.html validation-web/style.css validation-web/app.js .public/
+          mkdir -p .public/assets
+          if [ -f public/Logo_CENCorse-removebg-preview.png ]; then
+            cp public/Logo_CENCorse-removebg-preview.png .public/assets/
+          elif [ -f public/Logo_CENCorse.png ]; then
+            cp public/Logo_CENCorse.png .public/assets/Logo_CENCorse-removebg-preview.png
+          fi
           echo "window.SUPABASE_URL = '${{ secrets.SUPABASE_URL }}';" > .public/config.js
           echo "window.SUPABASE_ANON_KEY = '${{ secrets.SUPABASE_ANON_KEY }}';" >> .public/config.js
           touch .public/.nojekyll
