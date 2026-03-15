@@ -279,7 +279,7 @@ export default function CommunauteActivitesContent() {
   const pastActivities = totalActivities - upcomingActivities
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Notifications */}
       {notification && (
         <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${
@@ -293,7 +293,7 @@ export default function CommunauteActivitesContent() {
 
       {/* Statistiques avec design identique à Projets > Description */}
       <div className="animate-fade-in">
-        <div className={`grid gap-4 mb-4 ${
+        <div className={`grid gap-4 mb-2 ${
           isHydrated && (profile?.role === 'admin' || profile?.role === 'super_admin') 
             ? 'grid-cols-4' 
             : 'grid-cols-3'
@@ -384,7 +384,7 @@ export default function CommunauteActivitesContent() {
 
       {/* Barre de recherche */}
       <div className="animate-fade-in">
-        <div className="mb-4">
+        <div className="mb-2">
           <input
             type="text"
             placeholder="Rechercher une activité..."

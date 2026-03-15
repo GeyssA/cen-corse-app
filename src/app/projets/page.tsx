@@ -58,39 +58,26 @@ export default function ProjetsPage() {
 
                             return (
     <ProtectedRoute>
-      {/* Header uniforme avec logo et menu utilisateur */}
-      <div className="w-full glass-effect border-b border-white/10 h-16 overflow-hidden">
-        <div className="max-w-sm sm:max-w-md md:max-w-lg lg:max-w-1xl mx-auto px-0 sm:px-3 md:px-5 py-3 h-full flex items-center justify-between w-full">
-          {/* Logo à gauche */}
-          <div className="flex items-center">
+      {/* Bandeau fixe : même couleur que la barre système, sans ligne */}
+      <header className="app-header-bar w-full flex items-center justify-center">
+        <div className="max-w-sm sm:max-w-md md:max-w-lg lg:max-w-1xl mx-auto px-0 sm:px-3 md:px-5 w-full h-full flex items-center justify-between py-0.5">
+          <div className="flex items-center min-h-0">
             <button
               onClick={() => router.push('/')}
-              className={`bg-white rounded-2xl shadow-2xl flex items-center justify-center cursor-pointer hover:shadow-xl transition-all duration-300 hover:scale-105 ${
-                theme === 'light' ? 'border border-gray-800' : ''
-              }`}
-              style={{ 
-                width: 'clamp(130px, 32vw, 170px)', 
-                height: 'clamp(48px, 13vw, 64px)' 
-              }}
+              className="rounded-md flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shadow-md hover:shadow-lg bg-white"
+              style={{ width: 'clamp(120px, 30vw, 172px)', height: 'clamp(34px, 9vw, 44px)' }}
             >
-              <img 
-                src="/Logo_CENCorse.png" 
-                alt="CEN Corse" 
-                className="w-10/12 h-10/12 object-contain"
-                style={{ display: 'block' }}
-              />
+              <img src="/Logo_CENCorse.png" alt="CEN Corse" className="h-9 w-auto max-w-[160px] object-contain block" />
             </button>
           </div>
-
-          {/* Zone centrale pour le bouton d'ajout (admin uniquement) */}
           <div className="flex items-center justify-center flex-1">
             {profile?.role === 'admin' && (
-              <button 
+              <button
                 onClick={() => setShowAddModal(true)}
-                className={`w-8 h-8 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center text-white shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95 ${
+                className={`w-8 h-8 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center text-white shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 ${
                   theme === 'light'
-                    ? 'bg-gradient-to-br from-blue-500 to-purple-600 hover:shadow-blue-500/25'
-                    : 'bg-gradient-to-br from-blue-500 to-purple-600 hover:shadow-glow'
+                    ? 'bg-gradient-to-br from-blue-500 to-purple-600'
+                    : 'bg-gradient-to-br from-blue-500 to-purple-600'
                 }`}
                 title="Ajouter un projet"
               >
@@ -100,13 +87,11 @@ export default function ProjetsPage() {
               </button>
             )}
           </div>
-
-          {/* UserMenu à droite */}
           <div className="flex-shrink-0">
             <UserMenu />
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Sous-onglets */}
       <SubTabs 
@@ -116,7 +101,7 @@ export default function ProjetsPage() {
       />
 
       {/* Fond adaptatif pour la section principale */}
-      <div className={`min-h-screen w-full overflow-x-hidden transition-all duration-300 pb-20 ${
+      <div className={`min-h-screen w-full overflow-x-hidden transition-all duration-300 ${
         theme === 'dark' 
           ? 'bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900' 
           : 'bg-gradient-to-b from-blue-50 via-blue-100 to-blue-200'

@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import { getProfile, Profile, AuthState } from '@/lib/auth'
+import { getProfile, saveProfileToStorage, Profile, AuthState } from '@/lib/auth'
 
 // Cache simple pour les profils utilisateur (persiste tant que la session est active)
 const profileCache = new Map<string, { profile: Profile; timestamp: number }>()
@@ -30,6 +30,7 @@ const getCachedProfile = async (userId: string): Promise<Profile | null> => {
     
     if (profile) {
       profileCache.set(userId, { profile, timestamp: now })
+      saveProfileToStorage(profile)
     }
     
     return profile
@@ -50,6 +51,7 @@ const getCachedProfile = async (userId: string): Promise<Profile | null> => {
 
 interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<{ error: unknown }>
+  signInWithGoogle: () => Promise<{ error: unknown }>
   signUp: (email: string, password: string, fullName: string, accountType: 'employee' | 'external' | 'visitor') => Promise<{ error: unknown }>
   signOut: () => Promise<void>
   updateUserProfile: (updates: Partial<Profile>) => Promise<void>
@@ -226,6 +228,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(userProfile)
       }
       
+      return { data, error: null }
+    } catch (err) {
+      return { error: err }
+    }
+  }
+
+  const signInWithGoogle = async () => {
+    try {
+      const redirectTo = typeof window !== 'undefined'
+        ? `${window.location.origin}/auth/callback`
+        : '/auth/callback'
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo },
+      })
+      if (error) return { error }
+      if (data?.url && typeof window !== 'undefined') {
+        window.location.href = data.url
+      }
       return { data, error: null }
     } catch (err) {
       return { error: err }
@@ -413,6 +434,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profile,
     loading,
     signIn,
+    signInWithGoogle,
     signUp,
     signOut,
     updateUserProfile,

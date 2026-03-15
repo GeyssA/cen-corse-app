@@ -6,8 +6,11 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AmbienceProvider } from "@/contexts/AmbienceContext";
 import { ProjectsProvider } from "@/contexts/ProjectsContext";
 import { ToastProvider } from "@/components/ui/ToastProvider";
+import OfflineSync from "@/components/OfflineSync";
+import ScrollContainer from "@/components/ScrollContainer";
 import NoPullToRefresh from "@/components/NoPullToRefresh";
 import CapacitorStatusBar from "./layout-capacitor-statusbar";
+import DisplayNameGate from "@/components/auth/DisplayNameGate";
 // import Script from "next/script";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -26,7 +29,7 @@ export const metadata: Metadata = {
   title: "CEN Corse - Communauté",
   description: "Application communautaire du CEN Corse",
   manifest: "/manifest.json",
-  themeColor: "#1e3a8a",
+  themeColor: "#111827",
   viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover",
   appleWebApp: {
     capable: true,
@@ -55,7 +58,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="CEN Corse" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="theme-color" content="#1e3a8a" />
+        <meta name="theme-color" content="#111827" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="msapplication-tap-highlight" content="no" />
@@ -98,33 +101,20 @@ export default function RootLayout({
       </head>
       <body className={`${ibmPlexSans.variable} ${inter.variable} antialiased`}>
         <NoPullToRefresh />
-        <CapacitorStatusBar />
-        
-        {/* Script pour désactiver complètement la toolbar Vercel */}
         {process.env.NODE_ENV === 'production' && (
           <script src="/vercel-disable.js" defer></script>
         )}
-        
         <AuthProvider>
           <ThemeProvider>
+            <CapacitorStatusBar />
             <AmbienceProvider>
               <ProjectsProvider>
                 <ToastProvider>
-                  {/* Wrapper unique scrollable sur tout l'écran : le geste de scroll fonctionne partout */}
-                  <div
-                    className="scroll-container"
-                    style={{
-                      minHeight: '100vh',
-                      height: '100%',
-                      overflowY: 'auto',
-                      overflowX: 'hidden',
-                      WebkitOverflowScrolling: 'touch',
-                      touchAction: 'pan-y',
-                      overscrollBehavior: 'contain',
-                    }}
-                  >
+                  <OfflineSync />
+                  <DisplayNameGate />
+                  <ScrollContainer>
                     {children}
-                  </div>
+                  </ScrollContainer>
                 </ToastProvider>
               </ProjectsProvider>
             </AmbienceProvider>

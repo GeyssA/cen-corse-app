@@ -27,7 +27,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Appliquer le thème au body pour les styles globaux
     document.body.className = theme === 'dark' ? 'dark-theme' : 'light-theme'
-    
+    // Meta theme-color pour PWA / navigateur (barre d’état)
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]')
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute('content', theme === 'dark' ? '#111827' : '#f1f5f9')
+    }
     // Sauvegarder le thème dans localStorage
     localStorage.setItem('theme', theme)
   }, [theme])

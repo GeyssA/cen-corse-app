@@ -15,7 +15,7 @@ export default function AuthLoading({
   const showBird = message === 'Chargement...'
   
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 relative">
+    <div className="fixed inset-0 z-[60] min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 relative">
       <div className="flex-1 flex items-center justify-center mt-8">
         <div className="text-center max-w-sm mx-auto">
         

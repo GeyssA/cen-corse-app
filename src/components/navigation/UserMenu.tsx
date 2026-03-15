@@ -146,7 +146,7 @@ export default function UserMenu() {
             </div>
           </div>
         </div>
-        <div className="p-2 space-y-2">
+        <div className="p-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2">
           {/* Toggle Jour/Nuit */}
           <div className="pl-2 pr-4 py-3 flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -227,38 +227,39 @@ export default function UserMenu() {
           
           <div className={`border-t ${theme === 'light' ? 'border-gray-200' : 'border-white/10'}`}></div>
           
-          <Link
-            href="/signalement"
-            onClick={() => setIsOpen(false)}
-            className={`w-full text-left pl-2 pr-4 py-3 text-sm rounded-lg transition-all duration-200 flex items-center space-x-3 group ${
-              theme === 'light' 
-                ? 'text-gray-900 hover:bg-gray-100' 
-                : 'text-white hover:bg-white/10'
-            }`}
-          >
-            <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center group-hover:bg-orange-200 transition-colors">
-              <svg className="w-4 h-4 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-            </div>
-            <span className={`font-medium ${theme === 'light' ? 'text-gray-900' : 'text-white'}`}>Problème avec l'app</span>
-          </Link>
-          
-          <button
-            onClick={handleAboutClick}
-            className={`w-full text-left pl-2 pr-4 py-3 text-sm rounded-lg transition-all duration-200 flex items-center space-x-3 group ${
-              theme === 'light' 
-                ? 'text-gray-900 hover:bg-gray-100' 
-                : 'text-white hover:bg-white/10'
-            }`}
-          >
-            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <span className={`font-medium ${theme === 'light' ? 'text-gray-900' : 'text-white'}`}>À propos</span>
-          </button>
+          <div className={`rounded-xl border p-2 mt-2 ${theme === 'light' ? 'border-gray-200 bg-gray-50/80' : 'border-white/10 bg-white/5'}`}>
+            <Link
+              href="/signalement"
+              onClick={() => setIsOpen(false)}
+              className={`w-full text-left pl-2 pr-4 py-3 text-sm rounded-xl transition-all duration-200 flex items-center space-x-3 group ${
+                theme === 'light' 
+                  ? 'text-gray-900 hover:bg-gray-100' 
+                  : 'text-white hover:bg-white/10'
+              }`}
+            >
+              <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center group-hover:bg-orange-200 transition-colors shrink-0">
+                <svg className="w-4 h-4 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <span className={`font-medium ${theme === 'light' ? 'text-gray-900' : 'text-white'}`}>Problème avec l'app</span>
+            </Link>
+            <button
+              onClick={handleAboutClick}
+              className={`w-full text-left pl-2 pr-4 py-3 text-sm rounded-xl transition-all duration-200 flex items-center space-x-3 group ${
+                theme === 'light' 
+                  ? 'text-gray-900 hover:bg-gray-100' 
+                  : 'text-white hover:bg-white/10'
+              }`}
+            >
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors shrink-0">
+                <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <span className={`font-medium ${theme === 'light' ? 'text-gray-900' : 'text-white'}`}>À propos</span>
+            </button>
+          </div>
           
           <button
             onClick={handleSignOut}
@@ -287,8 +288,8 @@ export default function UserMenu() {
         onClick={handleOpenMenu}
         className="flex items-center space-x-3 p-2 sm:p-3 rounded-xl hover:bg-slate-100/80 transition-all duration-200 group"
       >
-        <div className="w-10 h-10 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow">
-          <span className="text-white text-sm font-semibold !text-white" style={{color: 'white !important'}}>
+        <div className="w-9 h-9 sm:w-9 sm:h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow">
+          <span className="text-white text-xs font-semibold !text-white" style={{color: 'white !important'}}>
             {user && profile 
               ? (profile.full_name?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase())
               : '?'

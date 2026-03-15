@@ -21,9 +21,9 @@ import { useTheme } from '@/contexts/ThemeContext'
 const presentationData = {
   title: "Conservatoire d'espaces naturels de Corse",
   subtitle: "Protéger et valoriser le patrimoine naturel de la Corse",
-  description: "Le Conservatoire d'espaces naturels Corse (CEN Corse) est une association de loi 1901 à but non lucratif, agréée au titre de la protection de l'environnement. Créé en 1972 à l'initiative de naturalistes locaux, il œuvre pour préserver le patrimoine naturel et la biodiversité de l'île. Implanté à Borgo en Haute-Corse et à Ajaccio en Corse-du-Sud, le CEN Corse réunit une équipe de 16 salariés aux expertises variées : Suivis faunistiques, ornithologie, herpétologie, écologie terrestre, gestion de projets complexes, biostatistique, gestion et restauration d'espaces naturels, cartographie, et conception de projets de recherches expérimentaux (génétique, acoustique, écomorphologie, sanitaire, origine de mortalité, etc.). Cette diversité d'expertises rend l'équipe particulièrement polyvalente et capable de répondre efficacement à une large gamme d'enjeux environnementaux.",
+  description: "Le Conservatoire d'espaces naturels Corse (CEN Corse) est une association de loi 1901 à but non lucratif, agréée au titre de la protection de l'environnement. Créé en 1972 à l'initiative de naturalistes locaux, il œuvre pour préserver le patrimoine naturel et la biodiversité de l'île. Implanté à Bastia et à Ajaccio en Corse-du-Sud, le CEN Corse réunit une équipe de 16 salariés aux expertises variées : Suivis faunistiques, ornithologie, herpétologie, écologie terrestre, gestion de projets complexes, biostatistique, gestion et restauration d'espaces naturels, cartographie, et conception de projets de recherches expérimentaux (génétique, acoustique, écomorphologie, sanitaire, origine de mortalité, etc.). Cette diversité d'expertises rend l'équipe particulièrement polyvalente et capable de répondre efficacement à une large gamme d'enjeux environnementaux.",
   addresses: [
-    "871, avenue de Borgo - 20290 Borgo",
+    "Zone d'activité d'Erbajolo, 20600 Bastia",
     "40 avenue Noël Franchini - 20090 Ajaccio"
   ],
   phone: "04 95 32 71 63",
@@ -781,36 +781,23 @@ export default function AProposPage() {
 
   return (
     <ProtectedRoute>
-      {/* Header uniforme avec logo et menu utilisateur */}
-      <div className="w-full glass-effect border-b border-white/10 h-16 overflow-hidden">
-        <div className="max-w-sm sm:max-w-md md:max-w-lg lg:max-w-1xl mx-auto px-0 sm:px-3 md:px-5 py-3 h-full flex items-center justify-between w-full">
-          {/* Logo à gauche */}
-          <div className="flex items-center">
+      {/* Bandeau fixe : même couleur que la barre système, sans ligne */}
+      <header className="app-header-bar w-full flex items-center justify-center">
+        <div className="max-w-sm sm:max-w-md md:max-w-lg lg:max-w-1xl mx-auto px-0 sm:px-3 md:px-5 w-full h-full flex items-center justify-between py-0.5">
+          <div className="flex items-center min-h-0">
             <button
               onClick={() => router.push('/')}
-              className={`bg-white rounded-2xl shadow-2xl flex items-center justify-center cursor-pointer hover:shadow-xl transition-all duration-300 hover:scale-105 ${
-                theme === 'light' ? 'border border-gray-800' : ''
-              }`}
-              style={{ 
-                width: 'clamp(130px, 32vw, 170px)', 
-                height: 'clamp(48px, 13vw, 64px)' 
-              }}
+              className="rounded-md flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shadow-md hover:shadow-lg bg-white"
+              style={{ width: 'clamp(120px, 30vw, 172px)', height: 'clamp(34px, 9vw, 44px)' }}
             >
-              <img 
-                src="/Logo_CENCorse.png" 
-                alt="CEN Corse" 
-                className="w-10/12 h-10/12 object-contain"
-                style={{ display: 'block' }}
-              />
+              <img src="/Logo_CENCorse.png" alt="CEN Corse" className="h-9 w-auto max-w-[160px] object-contain block" />
             </button>
           </div>
-
-          {/* UserMenu à droite */}
           <div className="flex-shrink-0">
             <UserMenu />
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Sous-onglets */}
       <SubTabs 
@@ -820,7 +807,7 @@ export default function AProposPage() {
       />
 
       {/* Fond adaptatif pour la section principale */}
-      <div className={`min-h-screen w-full overflow-x-hidden transition-all duration-300 pb-20 ${
+      <div className={`min-h-screen w-full overflow-x-hidden transition-all duration-300 ${
         theme === 'dark' 
           ? 'bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900' 
           : 'bg-gradient-to-b from-blue-50 via-blue-100 to-blue-200'

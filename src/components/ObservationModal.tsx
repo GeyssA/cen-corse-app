@@ -4,27 +4,33 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { createObservation } from '@/lib/observations'
+import { isOnline, addPendingObservation } from '@/lib/offlineQueue'
 import { uploadPhoto } from '@/lib/uploadPhoto'
 import { serializePhotoUrls, MAX_PHOTOS } from '@/lib/photoUrls'
 import { getSitesByUserAndProtocole, getSitesByUser, type ObservationSite } from '@/lib/sites'
 import { getObservationsByUser } from '@/lib/observations'
 import { getCurrentPositionAsync, isCapacitorNative, type GeoError } from '@/lib/geolocation'
+import { invalidateMapDataCache } from '@/lib/mapDataCache'
 import MapPickModal from '@/components/MapPickModal'
+import { FALLBACK_BIRDS_FULL_NAMES } from '@/lib/voiceObservationParser'
 
 const PROTOCOLE_OPTIONS = [
+  { value: 'Données opportunistes', label: 'Données opportunistes' },
   { value: 'POPReptile', label: 'POP Reptile' },
   { value: 'POPAmphibien', label: 'POP Amphibien' },
-  { value: 'IPA', label: 'IPA' },
-  { value: 'Hors protocole', label: 'Hors protocole' }
+  { value: 'IPA', label: 'IPA' }
 ]
 
 const GROUPE_OPTIONS = [
   { value: 'Amphibiens', label: 'Amphibiens' },
   { value: 'Reptiles', label: 'Reptiles' },
   { value: 'Oiseaux', label: 'Oiseaux' },
-  { value: 'Odonates', label: 'Odonates' },
   { value: 'Lépidoptères', label: 'Lépidoptères' },
+  { value: 'Arachnides', label: 'Arachnides' },
+  { value: 'Odonates', label: 'Odonates' },
+  { value: 'Orthoptères', label: 'Orthoptères' },
   { value: 'Mammifères', label: 'Mammifères' },
+  { value: 'Poissons', label: 'Poissons' },
   { value: 'Plantes', label: 'Plantes' }
 ]
 
@@ -43,27 +49,30 @@ const SEXE_OPTIONS = [
   { value: 'Indéterminé', label: 'Indéterminé' }
 ]
 
-const AMPHIBIENS_ESPECES = [
-  'Hyla sarda',
-  'Pelophylax lessonae bergeri',
-  'Bufotes viridis balearicus',
-  'Discoglossus sardus',
-  'Discoglossus montalentii',
-  'Euproctus montanus',
-  'Salamandra corsica'
+// Espèces de Corse uniquement (sélection dans la liste = nom commun - acceptedNameUsage)
+const AMPHIBIENS_CORSE: string[] = [
+  'Discoglosse sarde - Discoglossus sardus Tschudi in Otth, 1837',
+  'Discoglosse corse - Discoglossus montalentii Lanza, Nascetti, Capula & Bullini, 1984',
+  'Crapaud vert des Baléares - Bufotes viridis balearicus (Boettger, 1880)',
+  'Grenouille de Berger - Pelophylax lessonae bergeri (Günther in Engelmann, Fritzsche, Günther & Obst, 1986)',
+  'Rainette sarde - Hyla sarda (Betta, 1857)',
+  'Euprocte de Corse - Euproctus montanus (Savi, 1838)',
+  'Salamandre corse - Salamandra corsica (Savi, 1838)'
 ]
 
-const REPTILES_ESPECES = [
-  'Hierophis viridiflavus',
-  'Natrix helvetica corsa',
-  'Podarcis tiliguerta',
-  'Podarcis siculus',
-  'Algyroides fitzingeri',
-  'Tarentola mauritanica',
-  'Hemidactylus turcicus',
-  'Euleptes europaea',
-  'Archaeolacerta bedriagae',
-  'Testudo hermanni hermanni'
+const REPTILES_CORSE: string[] = [
+  'Lézard tyrrhénien - Podarcis tiliguerta (Gmelin, 1789)',
+  'Lézard sicilien - Podarcis siculus (Rafinesque-Schmaltz, 1810)',
+  'Lézard de Bedriaga - Archaeolacerta bedriagae (Camerano, 1885)',
+  'Algyroïde de Fitzinger - Algyroides fitzingeri (Wiegmann, 1834)',
+  'Couleuvre helvétique de Corse - Natrix helvetica corsa (Hecht, 1930)',
+  'Couleuvre verte et jaune - Hierophis viridiflavus (Lacepède, 1789)',
+  'Tarente de maurétanie - Tarentola mauritanica (Linnaeus, 1758)',
+  'Phyllodactyle d\'Europe - Euleptes europaea (Gené, 1839)',
+  'Hémydactyle verruqueux - Hemidactylus turcicus (Linnaeus, 1758)',
+  'Tortue d\'Hermann - Testudo hermanni Gmelin, 1789',
+  'Tortue de Floride - Trachemys scripta scripta (Schoepff, 1792)',
+  'Cistude d\'Europe - Emys orbicularis (Linnaeus, 1758)'
 ]
 
 interface ObservationForm {
@@ -98,6 +107,12 @@ interface ObservationModalProps {
   onSuccess?: () => void
   /** Incrémenter pour forcer le rechargement des sites (ex. après ajout d’un site). */
   sitesRefreshKey?: number
+  /** Pré-remplir le formulaire (ex. après saisie vocale). */
+  initialForm?: Partial<ObservationForm>
+  /** Position GPS initiale (ex. après saisie vocale). */
+  initialPosition?: { latitude: number; longitude: number } | null
+  /** Transcription vocale à afficher au-dessus de Contexte (petit, italique). */
+  voiceTranscript?: string
 }
 
 function getTodayISO(): string {
@@ -105,15 +120,15 @@ function getTodayISO(): string {
   return d.toISOString().slice(0, 10)
 }
 
-export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefreshKey }: ObservationModalProps) {
+export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefreshKey, initialForm, initialPosition, voiceTranscript }: ObservationModalProps) {
   const { theme } = useTheme()
   const { user, profile } = useAuth()
   const [form, setForm] = useState<ObservationForm>({
     date: getTodayISO(),
-    protocole: '',
+    protocole: 'Données opportunistes',
     passage: '',
     site: '',
-    presence: false,
+    presence: true,
     groupe: '',
     nom_espece: '',
     effectif: '',
@@ -137,9 +152,13 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
   const sexeRef = useRef<HTMLDivElement>(null)
   const [siteOpen, setSiteOpen] = useState(false)
   const siteRef = useRef<HTMLDivElement>(null)
+  const siteInputRef = useRef<HTMLInputElement>(null)
+  const [siteQuery, setSiteQuery] = useState('')
   const [especeOpen, setEspeceOpen] = useState(false)
+  const [speciesByGroup, setSpeciesByGroup] = useState<Record<string, string[]> | null>(null)
+  const [speciesQuery, setSpeciesQuery] = useState('')
   const especeRef = useRef<HTMLDivElement>(null)
-  const [especeAutreMode, setEspeceAutreMode] = useState(false)
+  const modalScrollRef = useRef<HTMLDivElement>(null)
   const [sites, setSites] = useState<ObservationSite[]>([])
   const [siteCustomMode, setSiteCustomMode] = useState(false)
   const [protocoleCustomMode, setProtocoleCustomMode] = useState(false)
@@ -148,8 +167,13 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
   const [sexeCustomMode, setSexeCustomMode] = useState(false)
   const [pinned, setPinned] = useState<Partial<Record<FormKey, boolean>>>({})
   const [showSuccessCheck, setShowSuccessCheck] = useState(false)
+  /** Champs pré-remplis par la saisie vocale (pour mise en exergue). */
+  const [voicePrefilledKeys, setVoicePrefilledKeys] = useState<Set<string>>(new Set())
   const [successFadeOut, setSuccessFadeOut] = useState(false)
+  const [successMessage, setSuccessMessage] = useState<string | undefined>(undefined)
   const [showMapPicker, setShowMapPicker] = useState(false)
+  const [showDonneesOpportunistesInfo, setShowDonneesOpportunistesInfo] = useState(false)
+  const [showPresenceInfo, setShowPresenceInfo] = useState(false)
   const [existingMapPoints, setExistingMapPoints] = useState<import('./MapPickContent').ExistingMapPoint[]>([])
   const [existingPointsLoaded, setExistingPointsLoaded] = useState(false)
   const [photoItems, setPhotoItems] = useState<Array<{ file: File; preview: string }>>([])
@@ -158,15 +182,22 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
 
   const isLight = theme === 'light'
   const togglePin = (field: FormKey) => setPinned((p) => ({ ...p, [field]: !p[field] }))
-  const isHorsProtocole = form.protocole === 'Hors protocole'
+  const isHorsProtocole = form.protocole === 'Données opportunistes'
+
+  const getSpeciesListForGroup = (groupe: string): string[] => {
+    if (groupe === 'Amphibiens') return AMPHIBIENS_CORSE
+    if (groupe === 'Reptiles') return REPTILES_CORSE
+    if (groupe === 'Oiseaux') return Array.from(new Set([...(speciesByGroup?.[groupe] ?? []), ...FALLBACK_BIRDS_FULL_NAMES]))
+    return speciesByGroup?.[groupe] ?? []
+  }
 
   const resetForm = () => {
     const defaultForm: ObservationForm = {
       date: getTodayISO(),
-      protocole: '',
+      protocole: 'Données opportunistes',
       passage: '',
       site: '',
-      presence: false,
+      presence: true,
       groupe: '',
       nom_espece: '',
       effectif: '',
@@ -184,11 +215,8 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
     setGroupeCustomMode(!GROUPE_OPTIONS.some((o) => o.value === next.groupe) && !!next.groupe)
     setStadeCustomMode(!STADE_OPTIONS.some((o) => o.value === next.stade) && !!next.stade)
     setSexeCustomMode(!SEXE_OPTIONS.some((o) => o.value === next.sexe) && !!next.sexe)
-    setEspeceAutreMode(
-      (next.groupe === 'Amphibiens' || next.groupe === 'Reptiles') &&
-        !!next.nom_espece &&
-        !(next.groupe === 'Amphibiens' ? AMPHIBIENS_ESPECES : REPTILES_ESPECES).includes(next.nom_espece)
-    )
+    setSpeciesQuery('')
+    setSiteQuery('')
     setSubmitError(null)
     setPhotoItems((prev) => {
       prev.forEach((p) => URL.revokeObjectURL(p.preview))
@@ -200,6 +228,40 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
     resetForm()
     onClose()
   }
+
+  // Appliquer le pré-remplissage (saisie vocale) à l'ouverture
+  useEffect(() => {
+    if (!isOpen) return
+    if (initialForm && Object.keys(initialForm).length > 0) {
+      const keys = new Set<string>()
+      ;(Object.keys(initialForm) as (keyof ObservationForm)[]).forEach((k) => {
+        const v = initialForm[k]
+        if (v != null && v !== '') keys.add(k)
+      })
+      setVoicePrefilledKeys(keys)
+      // Réinitialiser complètement le formulaire puis appliquer la voix (évite de garder groupe/espèce d'une ancienne commande)
+      const baseForm: ObservationForm = {
+        date: getTodayISO(),
+        protocole: 'Données opportunistes',
+        passage: '',
+        site: '',
+        presence: true,
+        groupe: '',
+        nom_espece: '',
+        effectif: '',
+        stade: '',
+        sexe: '',
+        remarques: ''
+      }
+      setForm({ ...baseForm, ...initialForm })
+    } else {
+      setVoicePrefilledKeys(new Set())
+    }
+    if (initialPosition) {
+      setLatitude(initialPosition.latitude)
+      setLongitude(initialPosition.longitude)
+    }
+  }, [isOpen, initialForm, initialPosition])
 
   // Fermer la liste Protocole au clic extérieur
   useEffect(() => {
@@ -273,19 +335,50 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [especeOpen])
 
-  // Réinitialiser le mode "Autre" espèce si on quitte Amphibiens/Reptiles
-  useEffect(() => {
-    if (form.groupe !== 'Amphibiens' && form.groupe !== 'Reptiles') setEspeceAutreMode(false)
-  }, [form.groupe])
-
   // Charger les sites du user pour le protocole sélectionné
   useEffect(() => {
     if (!user?.id || !form.protocole) {
       setSites([])
       return
     }
+    setSiteQuery('')
     getSitesByUserAndProtocole(user.id, form.protocole).then(setSites)
   }, [user?.id, form.protocole, isOpen, sitesRefreshKey])
+
+  // Charger la liste des espèces par groupe (taxon) pour l'autocomplete
+  useEffect(() => {
+    if (!isOpen) return
+    fetch('/taxon/species-by-group.json')
+      .then((r) => r.json())
+      .then(setSpeciesByGroup)
+      .catch(() => setSpeciesByGroup({}))
+  }, [isOpen])
+
+  // Réinitialiser l'espèce seulement si elle n'est pas valide pour le nouveau groupe (préserve le pré-rempli vocal)
+  useEffect(() => {
+    setForm((f) => {
+      const list = getSpeciesListForGroup(f.groupe)
+      // Ne pas vider quand le groupe n'a pas de liste (ex. ouverture avec initialForm, groupe pas encore appliqué)
+      const keep = list.length === 0 || !f.nom_espece || list.includes(f.nom_espece)
+      return { ...f, nom_espece: keep ? f.nom_espece : '' }
+    })
+    setSpeciesQuery('')
+    setEspeceOpen(false)
+  }, [form.groupe])
+
+  // Forcer le groupe quand le protocole l'impose (POP Reptile → Reptiles, etc.)
+  const groupeForcedByProtocole =
+    form.protocole === 'POPReptile' ? 'Reptiles'
+    : form.protocole === 'POPAmphibien' ? 'Amphibiens'
+    : form.protocole === 'IPA' ? 'Oiseaux'
+    : null
+  useEffect(() => {
+    if (groupeForcedByProtocole) {
+      setForm((f) => (f.groupe === groupeForcedByProtocole ? f : { ...f, groupe: groupeForcedByProtocole }))
+      setGroupeOpen(false)
+      setGroupeCustomMode(false)
+    }
+  }, [form.protocole, groupeForcedByProtocole])
 
   // Charger sites + observations pour afficher sur la carte (choix de position)
   useEffect(() => {
@@ -312,6 +405,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
             }
             if (s.path_coordinates && s.path_coordinates.length >= 2) {
               point.path_coordinates = s.path_coordinates
+              if (s.length_meters != null) point.length_meters = s.length_meters
             }
             points.push(point)
           }
@@ -345,7 +439,8 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
       })
   }, [isOpen, user?.id])
 
-  // Réinitialiser le formulaire à l'ouverture. En app (Capacitor) : récup auto de la position (après 1ère autorisation). En run dev (navigateur) : pas d'auto pour éviter le refus silencieux — l'utilisateur clique sur le bouton.
+  // Réinitialiser le formulaire à l'ouverture. En app (Capacitor) : récup auto de la position (après 1ère autorisation).
+  // En run dev (navigateur) : pas d'auto pour éviter le refus silencieux — l'utilisateur clique sur le bouton.
   useEffect(() => {
     if (!isOpen) return
     setForm((f) => ({ ...f, date: getTodayISO() }))
@@ -354,7 +449,6 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
     setGroupeCustomMode(false)
     setStadeCustomMode(false)
     setSexeCustomMode(false)
-    setEspeceAutreMode(false)
     setSubmitError(null)
     setGeoError(null)
     if (!isCapacitorNative()) {
@@ -402,6 +496,14 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
       setSubmitError('Vous devez être connecté pour enregistrer une observation.')
       return
     }
+    if (form.groupe && form.nom_espece) {
+      const list = getSpeciesListForGroup(form.groupe)
+      const allowed = list.length === 0 || list.includes(form.nom_espece)
+      if (!allowed) {
+        setSubmitError('Veuillez sélectionner une espèce dans la liste proposée.')
+        return
+      }
+    }
     if (form.effectif.trim() !== '') {
       const effectifNum = Number(form.effectif)
       if (Number.isNaN(effectifNum) || effectifNum < 0) {
@@ -411,12 +513,74 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
     }
     setSubmitLoading(true)
     try {
+      const payload = {
+        ...form,
+        latitude,
+        longitude,
+        observateur: profile?.full_name ?? '',
+        user_id: user.id,
+        photo_url: undefined as string | undefined
+      }
+
+      if (!isOnline()) {
+        await addPendingObservation(payload, photoItems.map((i) => i.file))
+        const defaultForm: ObservationForm = {
+          date: getTodayISO(),
+          protocole: 'Données opportunistes',
+          passage: '',
+          site: '',
+          presence: true,
+          groupe: '',
+          nom_espece: '',
+          effectif: '',
+          stade: '',
+          sexe: '',
+          remarques: ''
+        }
+        const nextForm = { ...defaultForm }
+        ;(Object.keys(pinned) as FormKey[]).forEach((key) => {
+          if (pinned[key] && key in nextForm) (nextForm as any)[key] = form[key]
+        })
+        setForm(nextForm)
+        setSiteCustomMode(sites.some((s) => s.nom_du_site === nextForm.site) ? false : !!nextForm.site)
+        setSpeciesQuery('')
+        setSiteQuery('')
+        setProtocoleCustomMode(!PROTOCOLE_OPTIONS.some((o) => o.value === nextForm.protocole) && !!nextForm.protocole)
+        setGroupeCustomMode(!GROUPE_OPTIONS.some((o) => o.value === nextForm.groupe) && !!nextForm.groupe)
+        setStadeCustomMode(!STADE_OPTIONS.some((o) => o.value === nextForm.stade) && !!nextForm.stade)
+        setSexeCustomMode(!SEXE_OPTIONS.some((o) => o.value === nextForm.sexe) && !!nextForm.sexe)
+        setSuccessFadeOut(false)
+        setShowSuccessCheck(true)
+        setSubmitError(null)
+        setSuccessMessage('Enregistré localement. Envoi automatique dès que vous serez en ligne.')
+        setTimeout(() => setSuccessFadeOut(true), 2500)
+        setTimeout(() => {
+          setShowSuccessCheck(false)
+          setSuccessMessage(undefined)
+        }, 3000)
+        setPhotoItems((prev) => {
+          prev.forEach((p) => URL.revokeObjectURL(p.preview))
+          return []
+        })
+        onSuccess?.()
+        setSubmitLoading(false)
+        return
+      }
+
       const photoUrls: string[] = []
       if (photoItems.length > 0 && user) {
         for (const item of photoItems) {
           const url = await uploadPhoto(item.file, 'observation', user.id)
           if (!url) {
-            setSubmitError('Impossible d’envoyer une ou plusieurs photos.')
+            // Échec upload photo : on enregistre en local, les photos seront envoyées au sync
+            await addPendingObservation(payload, photoItems.map((i) => i.file))
+            setSuccessFadeOut(false)
+            setShowSuccessCheck(true)
+            setSuccessMessage('Enregistré localement. Envoi automatique dès que vous serez en ligne.')
+            setTimeout(() => setSuccessFadeOut(true), 2500)
+            setTimeout(() => { setShowSuccessCheck(false); setSuccessMessage(undefined) }, 3000)
+            setPhotoItems((prev) => { prev.forEach((p) => URL.revokeObjectURL(p.preview)); return [] })
+            onSuccess?.()
             setSubmitLoading(false)
             return
           }
@@ -435,10 +599,10 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
       if (result.data) {
         const defaultForm: ObservationForm = {
           date: getTodayISO(),
-          protocole: '',
+          protocole: 'Données opportunistes',
           passage: '',
           site: '',
-          presence: false,
+          presence: true,
           groupe: '',
           nom_espece: '',
           effectif: '',
@@ -452,17 +616,15 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
         })
         setForm(nextForm)
         setSiteCustomMode(sites.some((s) => s.nom_du_site === nextForm.site) ? false : !!nextForm.site)
+        setSpeciesQuery('')
+        setSiteQuery('')
         setProtocoleCustomMode(!PROTOCOLE_OPTIONS.some((o) => o.value === nextForm.protocole) && !!nextForm.protocole)
         setGroupeCustomMode(!GROUPE_OPTIONS.some((o) => o.value === nextForm.groupe) && !!nextForm.groupe)
         setStadeCustomMode(!STADE_OPTIONS.some((o) => o.value === nextForm.stade) && !!nextForm.stade)
         setSexeCustomMode(!SEXE_OPTIONS.some((o) => o.value === nextForm.sexe) && !!nextForm.sexe)
-        setEspeceAutreMode(
-          (nextForm.groupe === 'Amphibiens' || nextForm.groupe === 'Reptiles') &&
-            !!nextForm.nom_espece &&
-            !(nextForm.groupe === 'Amphibiens' ? AMPHIBIENS_ESPECES : REPTILES_ESPECES).includes(nextForm.nom_espece)
-        )
         setSuccessFadeOut(false)
         setShowSuccessCheck(true)
+        setSuccessMessage(undefined)
         setTimeout(() =>         setSuccessFadeOut(true), 1100)
         setTimeout(() => setShowSuccessCheck(false), 1600)
         setPhotoItems((prev) => {
@@ -473,10 +635,69 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
         invalidateMapDataCache()
         // Ne pas fermer : l'utilisateur peut enchaîner une autre donnée sur le même point
       } else {
-        setSubmitError('Impossible d’enregistrer l’observation. Vérifiez la configuration Supabase.')
+        // Échec Supabase (réseau, config, etc.) : enregistrement en local, sync au retour du réseau
+        await addPendingObservation(payload, photoItems.map((i) => i.file))
+        const defaultForm: ObservationForm = {
+          date: getTodayISO(),
+          protocole: 'Données opportunistes',
+          passage: '',
+          site: '',
+          presence: true,
+          groupe: '',
+          nom_espece: '',
+          effectif: '',
+          stade: '',
+          sexe: '',
+          remarques: ''
+        }
+        const nextForm = { ...defaultForm }
+        ;(Object.keys(pinned) as FormKey[]).forEach((key) => {
+          if (pinned[key] && key in nextForm) (nextForm as any)[key] = form[key]
+        })
+        setForm(nextForm)
+        setSiteCustomMode(sites.some((s) => s.nom_du_site === nextForm.site) ? false : !!nextForm.site)
+        setSpeciesQuery('')
+        setSiteQuery('')
+        setProtocoleCustomMode(!PROTOCOLE_OPTIONS.some((o) => o.value === nextForm.protocole) && !!nextForm.protocole)
+        setGroupeCustomMode(!GROUPE_OPTIONS.some((o) => o.value === nextForm.groupe) && !!nextForm.groupe)
+        setStadeCustomMode(!STADE_OPTIONS.some((o) => o.value === nextForm.stade) && !!nextForm.stade)
+        setSexeCustomMode(!SEXE_OPTIONS.some((o) => o.value === nextForm.sexe) && !!nextForm.sexe)
+        setSubmitError(null)
+        setSuccessFadeOut(false)
+        setShowSuccessCheck(true)
+        setSuccessMessage('Enregistré localement. Envoi automatique dès que vous serez en ligne.')
+        setTimeout(() => setSuccessFadeOut(true), 2500)
+        setTimeout(() => { setShowSuccessCheck(false); setSuccessMessage(undefined) }, 3000)
+        setPhotoItems((prev) => { prev.forEach((p) => URL.revokeObjectURL(p.preview)); return [] })
+        onSuccess?.()
       }
     } catch (e) {
-      setSubmitError('Erreur lors de l’enregistrement.')
+      // Erreur réseau ou inattendue : sauvegarde en local pour ne pas perdre la donnée
+      try {
+        const payload = {
+          ...form,
+          latitude: latitude ?? null,
+          longitude: longitude ?? null,
+          observateur: profile?.full_name ?? '',
+          user_id: user?.id,
+          photo_url: undefined as string | undefined
+        }
+        if (user && latitude != null && longitude != null) {
+          await addPendingObservation(payload, photoItems.map((i) => i.file))
+          setSubmitError(null)
+          setSuccessFadeOut(false)
+          setShowSuccessCheck(true)
+          setSuccessMessage('Enregistré localement. Envoi automatique dès que vous serez en ligne.')
+          setTimeout(() => setSuccessFadeOut(true), 2500)
+          setTimeout(() => { setShowSuccessCheck(false); setSuccessMessage(undefined) }, 3000)
+          setPhotoItems((prev) => { prev.forEach((p) => URL.revokeObjectURL(p.preview)); return [] })
+          onSuccess?.()
+        } else {
+          setSubmitError('Erreur lors de l’enregistrement.')
+        }
+      } catch {
+        setSubmitError('Erreur lors de l’enregistrement.')
+      }
     } finally {
       setSubmitLoading(false)
     }
@@ -491,19 +712,36 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
   }`
   const labelClass = `block text-sm font-medium ${isLight ? 'text-gray-700' : 'text-gray-300'}`
   const labelRowClass = 'flex items-center justify-between gap-2 mb-1.5'
+  const VOICE_FIELD_KEYS: FormKey[] = ['groupe', 'nom_espece', 'stade', 'sexe', 'effectif', 'remarques']
+  const voiceFieldClass = (key: FormKey): string => {
+    if (voicePrefilledKeys.has(key) && form[key]) {
+      return isLight
+        ? 'rounded-lg border-l-4 border-emerald-500 bg-emerald-50/50 pl-2 -ml-0.5'
+        : 'rounded-lg border-l-4 border-emerald-500 bg-emerald-900/25 pl-2 -ml-0.5'
+    }
+    return ''
+  }
   const sectionTitleClass = `text-xs font-semibold uppercase tracking-wider ${isLight ? 'text-gray-500' : 'text-gray-400'}`
   const pinButtonTitle = (field: FormKey) => (pinned[field] ? 'Ne plus conserver cette valeur' : 'Conserver pour la prochaine saisie')
 
   return (
     <>
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div
-        className={`relative w-full max-w-2xl max-h-[88vh] overflow-y-auto rounded-lg shadow-xl border ${
-          isLight ? 'bg-white border-gray-200' : 'bg-gray-900 border-gray-700'
-        }`}
-      >
-        <header className={`sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b ${isLight ? 'border-gray-100 bg-white/98' : 'border-gray-800 bg-gray-900/98'} backdrop-blur`}>
-          <h2 className={`text-xl font-semibold tracking-tight ${isLight ? 'text-gray-900' : 'text-white'}`}>
+    <div
+      className={`fixed inset-0 z-[100] flex flex-col safe-area-modal ${
+        isLight ? 'bg-slate-50' : 'bg-gray-950'
+      }`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="observation-modal-title"
+    >
+      <div ref={modalScrollRef} className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden">
+        <div
+          className={`relative w-full min-h-full ${
+            isLight ? 'bg-white border-gray-200' : 'bg-gray-900 border-gray-700'
+          }`}
+        >
+        <header className={`sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6 py-4 border-b ${isLight ? 'border-gray-200 bg-white' : 'border-gray-700 bg-gray-900'}`}>
+          <h2 id="observation-modal-title" className={`text-xl font-semibold tracking-tight ${isLight ? 'text-gray-900' : 'text-white'}`}>
             Nouvelle observation naturaliste
           </h2>
           <button
@@ -511,13 +749,26 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
             className={`p-2 -m-2 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-gray-800 text-gray-400'}`}
             aria-label="Fermer"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </header>
 
-        <div className="px-6 py-5 space-y-6">
+        <div className="px-4 sm:px-6 py-5 pb-8 max-w-2xl mx-auto space-y-6">
+          {voiceTranscript && (
+            <div className={`rounded-xl border p-4 ${isLight ? 'bg-sky-50/80 border-sky-200' : 'bg-sky-900/20 border-sky-700/50'}`}>
+              <p className={`text-xs font-semibold uppercase tracking-wide mb-1 ${isLight ? 'text-sky-700' : 'text-sky-300'}`}>
+                Phrase retranscrite
+              </p>
+              <p className={`text-sm italic mb-2 ${isLight ? 'text-gray-700' : 'text-gray-300'}`}>
+                « {voiceTranscript} »
+              </p>
+              <p className={`text-xs ${isLight ? 'text-gray-600' : 'text-gray-400'}`}>
+                L’application a extrait automatiquement les informations (espèce, effectif, stade, sexe) pour pré-remplir les champs ci-dessous. Vous pouvez les modifier avant d’enregistrer.
+              </p>
+            </div>
+          )}
           <section>
             <h3 className={`${sectionTitleClass} mb-3`}>Contexte</h3>
             <div className="space-y-4">
@@ -606,17 +857,26 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                         key={opt.value}
                         type="button"
                         onClick={() => {
-                          setForm((f) => ({ ...f, protocole: opt.value }))
+                          const groupeForProtocole =
+                            opt.value === 'POPReptile' ? 'Reptiles'
+                            : opt.value === 'POPAmphibien' ? 'Amphibiens'
+                            : opt.value === 'IPA' ? 'Oiseaux'
+                            : ''
+                          setForm((f) => ({ ...f, protocole: opt.value, groupe: groupeForProtocole }))
                           setProtocoleOpen(false)
                         }}
                         className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 ${
-                          form.protocole === opt.value
+                          opt.value === 'Données opportunistes'
                             ? isLight
-                              ? 'bg-teal-50 text-teal-800'
-                              : 'bg-teal-900/30 text-teal-200'
-                            : isLight
-                              ? 'hover:bg-gray-50 text-gray-800'
-                              : 'hover:bg-gray-700/80 text-gray-200'
+                              ? 'bg-sky-50/90 hover:bg-sky-100/90 text-gray-800'
+                              : 'bg-sky-900/25 hover:bg-sky-900/40 text-gray-200'
+                            : form.protocole === opt.value
+                              ? isLight
+                                ? 'bg-teal-50 text-teal-800'
+                                : 'bg-teal-900/30 text-teal-200'
+                              : isLight
+                                ? 'hover:bg-gray-50 text-gray-800'
+                                : 'hover:bg-gray-700/80 text-gray-200'
                         }`}
                       >
                         {form.protocole === opt.value && (
@@ -624,7 +884,22 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                           </svg>
                         )}
-                        <span>{opt.label}</span>
+                        <span className="flex-1">{opt.label}</span>
+                        {opt.value === 'Données opportunistes' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setShowDonneesOpportunistesInfo(true)
+                            }}
+                            className={`p-1.5 rounded-lg shrink-0 transition-colors ${isLight ? 'hover:bg-sky-200/80 text-sky-600' : 'hover:bg-sky-800/50 text-sky-400'}`}
+                            aria-label="En savoir plus sur les données opportunistes"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </button>
+                        )}
                       </button>
                     ))}
                     <button
@@ -706,7 +981,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
             )}
           </div>
 
-          <div ref={siteRef} className="relative">
+          <div ref={siteRef} className="relative scroll-mt-16">
             <div className={labelRowClass}>
               <label className={labelClass}>Site</label>
               <button type="button" onClick={() => togglePin('site')} title={pinButtonTitle('site')} className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-200' : 'hover:bg-gray-700'}`} aria-label={pinButtonTitle('site')}>
@@ -728,7 +1003,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                 />
                 <button
                   type="button"
-                  onClick={() => { setSiteCustomMode(false); setForm((f) => ({ ...f, site: '' })) }}
+                  onClick={() => { setSiteCustomMode(false); setForm((f) => ({ ...f, site: '' })); setSiteQuery('') }}
                   className={`text-xs ${isLight ? 'text-sky-600 hover:text-sky-700' : 'text-sky-400 hover:text-sky-300'}`}
                 >
                   Choisir un site existant
@@ -736,64 +1011,101 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
               </div>
             ) : (
               <>
-                <button
-                  type="button"
-                  onClick={() => setSiteOpen((o) => !o)}
-                  className={`${inputClass} flex items-center justify-between gap-2 text-left cursor-pointer`}
-                >
-                  <span className={form.site ? (isLight ? 'text-gray-800' : 'text-gray-100') : (isLight ? 'text-gray-500' : 'text-gray-400')}>
-                    {form.site || 'Sélectionner un site…'}
-                  </span>
-                  <svg
-                    className={`w-4 h-4 shrink-0 transition-transform duration-200 ${siteOpen ? 'rotate-180' : ''} ${isLight ? 'text-gray-500' : 'text-gray-400'}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+                <div className="relative">
+                  <input
+                    ref={siteInputRef}
+                    type="text"
+                    value={form.site || siteQuery}
+                    onChange={(e) => {
+                      const q = e.target.value
+                      setSiteQuery(q)
+                      if (form.site) setForm((f) => ({ ...f, site: '' }))
+                      setSiteOpen(true)
+                    }}
+                    onFocus={() => {
+                      siteRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+                      setSiteOpen(true)
+                    }}
+                    className={`${inputClass} pr-9`}
+                    placeholder="Tapez pour rechercher un site…"
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm((f) => ({ ...f, site: '' }))
+                      setSiteQuery('')
+                      setSiteOpen(false)
+                    }}
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full transition-colors ${isLight ? 'text-gray-400 hover:bg-gray-200 hover:text-gray-600' : 'text-gray-500 hover:bg-gray-600 hover:text-gray-300'}`}
+                    title={form.site ? 'Supprimer le choix' : 'Fermer la liste'}
+                    aria-label={form.site ? 'Supprimer le choix du site' : 'Fermer la liste déroulante'}
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
                 {siteOpen && (
                   <div
-                    className={`absolute left-0 right-0 top-full mt-1 z-20 rounded-xl border shadow-lg overflow-hidden max-h-56 overflow-y-auto ${
+                    className={`absolute left-0 right-0 top-full z-30 mt-1 rounded-xl border shadow-lg overflow-hidden max-h-56 overflow-y-auto ${
                       isLight ? 'bg-white border-gray-200 shadow-gray-200/50' : 'bg-gray-800 border-gray-600 shadow-black/30'
                     }`}
                   >
-                    {sites.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => {
-                          setForm((f) => ({ ...f, site: s.nom_du_site }))
-                          setSiteOpen(false)
-                        }}
-                        className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 ${
-                          form.site === s.nom_du_site
-                            ? isLight ? 'bg-teal-50 text-teal-800' : 'bg-teal-900/30 text-teal-200'
-                            : isLight ? 'hover:bg-gray-50 text-gray-800' : 'hover:bg-gray-700/80 text-gray-200'
-                        }`}
-                      >
-                        {form.site === s.nom_du_site && (
-                          <svg className="w-4 h-4 shrink-0 text-teal-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                        <span>{s.nom_du_site}</span>
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSiteCustomMode(true)
-                        setSiteOpen(false)
-                        setForm((f) => ({ ...f, site: '' }))
-                      }}
-                      className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 border-t ${
-                        isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'
-                      }`}
-                    >
-                      <span>Saisie libre…</span>
-                    </button>
+                    {(() => {
+                      const q = (siteQuery || form.site || '').trim().toLowerCase()
+                      const filtered = q
+                        ? sites.filter((s) => s.nom_du_site.toLowerCase().includes(q)).slice(0, 80)
+                        : sites.slice(0, 80)
+                      return (
+                        <>
+                          {sites.length === 0 ? (
+                            <div className={`px-4 py-3 text-sm ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
+                              Aucun site enregistré pour ce protocole. Utilisez « Saisie libre » ci-dessous pour en créer un.
+                            </div>
+                          ) : filtered.length === 0 ? (
+                            <div className={`px-4 py-3 text-sm ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
+                              Aucun site ne contient « {siteQuery.trim()} ». Affinez ou utilisez « Saisie libre ».
+                            </div>
+                          ) : null}
+                          {filtered.map((s) => (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() => {
+                                setForm((f) => ({ ...f, site: s.nom_du_site }))
+                                setSiteQuery('')
+                                setSiteOpen(false)
+                              }}
+                              className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 ${
+                                form.site === s.nom_du_site
+                                  ? isLight ? 'bg-teal-50 text-teal-800' : 'bg-teal-900/30 text-teal-200'
+                                  : isLight ? 'hover:bg-gray-50 text-gray-800' : 'hover:bg-gray-700/80 text-gray-200'
+                              }`}
+                            >
+                              {form.site === s.nom_du_site && (
+                                <svg className="w-4 h-4 shrink-0 text-teal-600" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                              <span>{s.nom_du_site}</span>
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSiteCustomMode(true)
+                              setSiteOpen(false)
+                              setForm((f) => ({ ...f, site: '' }))
+                              setSiteQuery('')
+                            }}
+                            className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}
+                          >
+                            <span>Saisie libre…</span>
+                          </button>
+                        </>
+                      )
+                    })()}
                   </div>
                 )}
               </>
@@ -803,9 +1115,21 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
           <div>
             <div className={labelRowClass}>
               <label className={labelClass}>Présence</label>
-              <button type="button" onClick={() => togglePin('presence')} title={pinButtonTitle('presence')} className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-200' : 'hover:bg-gray-700'}`} aria-label={pinButtonTitle('presence')}>
-                <PinIcon pinned={!!pinned.presence} isLight={isLight} />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setShowPresenceInfo(true)}
+                  className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-200 text-gray-500' : 'hover:bg-gray-700 text-gray-400'}`}
+                  aria-label="En savoir plus sur présence / absence"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+                <button type="button" onClick={() => togglePin('presence')} title={pinButtonTitle('presence')} className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-200' : 'hover:bg-gray-700'}`} aria-label={pinButtonTitle('presence')}>
+                  <PinIcon pinned={!!pinned.presence} isLight={isLight} />
+                </button>
+              </div>
             </div>
             <div className="flex gap-2">
               <button
@@ -847,13 +1171,22 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
           </section>
 
           <div ref={groupeRef} className="relative">
+            <div className={voiceFieldClass('groupe') || undefined}>
             <div className={labelRowClass}>
               <label className={labelClass}>Groupe</label>
-              <button type="button" onClick={() => togglePin('groupe')} title={pinButtonTitle('groupe')} className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-200' : 'hover:bg-gray-700'}`} aria-label={pinButtonTitle('groupe')}>
-                <PinIcon pinned={!!pinned.groupe} isLight={isLight} />
-              </button>
+              {!groupeForcedByProtocole && (
+                <button type="button" onClick={() => togglePin('groupe')} title={pinButtonTitle('groupe')} className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-200' : 'hover:bg-gray-700'}`} aria-label={pinButtonTitle('groupe')}>
+                  <PinIcon pinned={!!pinned.groupe} isLight={isLight} />
+                </button>
+              )}
             </div>
-            {groupeCustomMode ? (
+            {groupeForcedByProtocole ? (
+              <div className={`${inputClass} opacity-90 cursor-default pointer-events-none`}>
+                <span className={form.groupe ? (isLight ? 'text-gray-800' : 'text-gray-100') : (isLight ? 'text-gray-500' : 'text-gray-400')}>
+                  {GROUPE_OPTIONS.find((o) => o.value === groupeForcedByProtocole)?.label ?? groupeForcedByProtocole}
+                </span>
+              </div>
+            ) : groupeCustomMode ? (
               <div className="space-y-1">
                 <button type="button" onClick={() => setGroupeCustomMode(false)} className={`text-xs ${isLight ? 'text-sky-600 hover:text-sky-700' : 'text-sky-400 hover:text-sky-300'}`}>
                   Choisir dans la liste
@@ -948,86 +1281,141 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                 )}
               </>
             )}
+            </div>
           </div>
 
-          <div ref={especeRef} className="relative">
+          <div ref={especeRef} className="relative scroll-mt-18">
+            <div className={voiceFieldClass('nom_espece') || undefined}>
             <div className={labelRowClass}>
               <label className={labelClass}>Nom espèce</label>
               <button type="button" onClick={() => togglePin('nom_espece')} title={pinButtonTitle('nom_espece')} className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-200' : 'hover:bg-gray-700'}`} aria-label={pinButtonTitle('nom_espece')}>
                 <PinIcon pinned={!!pinned.nom_espece} isLight={isLight} />
               </button>
             </div>
-            {(form.groupe === 'Amphibiens' || form.groupe === 'Reptiles') && !especeAutreMode ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setEspeceOpen((o) => !o)}
-                  className={`${inputClass} flex items-center justify-between gap-2 text-left cursor-pointer`}
-                >
-                  <span className={form.nom_espece ? (isLight ? 'text-gray-800' : 'text-gray-100') : (isLight ? 'text-gray-500' : 'text-gray-400')}>
-                    {form.nom_espece || 'Sélectionner une espèce…'}
-                  </span>
-                  <svg className={`w-4 h-4 shrink-0 transition-transform duration-200 ${especeOpen ? 'rotate-180' : ''} ${isLight ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {especeOpen && (
-                  <div className={`absolute left-0 right-0 top-full mt-1 z-20 rounded-xl border shadow-lg overflow-hidden max-h-56 overflow-y-auto ${isLight ? 'bg-white border-gray-200 shadow-gray-200/50' : 'bg-gray-800 border-gray-600 shadow-black/30'}`}>
-                    {(form.groupe === 'Amphibiens' ? AMPHIBIENS_ESPECES : REPTILES_ESPECES).map((esp) => (
-                      <button
-                        key={esp}
-                        type="button"
-                        onClick={() => {
-                          setForm((f) => ({ ...f, nom_espece: esp }))
-                          setEspeceOpen(false)
-                        }}
-                        className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 ${form.nom_espece === esp ? (isLight ? 'bg-teal-50 text-teal-800' : 'bg-teal-900/30 text-teal-200') : (isLight ? 'hover:bg-gray-50 text-gray-800' : 'hover:bg-gray-700/80 text-gray-200')}`}
-                      >
-                        {form.nom_espece === esp && (
-                          <svg className="w-4 h-4 shrink-0 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                        <span>{esp}</span>
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEspeceAutreMode(true)
-                        setEspeceOpen(false)
-                        setForm((f) => ({ ...f, nom_espece: '' }))
-                      }}
-                      className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}
-                    >
-                      <span>Autre (saisie libre)…</span>
-                    </button>
-                  </div>
-                )}
-              </>
+            {!form.groupe ? (
+              <div className={`${inputClass} opacity-75 cursor-default`}>
+                <span className={isLight ? 'text-gray-500' : 'text-gray-400'}>Sélectionnez d'abord un groupe</span>
+              </div>
             ) : (
-              <div className="space-y-1">
-                {(form.groupe === 'Amphibiens' || form.groupe === 'Reptiles') && especeAutreMode && (
+              <>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={
+                      getSpeciesListForGroup(form.groupe).length === 0
+                        ? form.nom_espece
+                        : (form.nom_espece || speciesQuery)
+                    }
+                    onChange={(e) => {
+                      const q = e.target.value
+                      const list = getSpeciesListForGroup(form.groupe)
+                      if (list.length === 0) {
+                        setForm((f) => ({ ...f, nom_espece: q }))
+                        setSpeciesQuery('')
+                      } else {
+                        setSpeciesQuery(q)
+                        if (form.nom_espece) setForm((f) => ({ ...f, nom_espece: '' }))
+                        setEspeceOpen(true)
+                      }
+                    }}
+                    onFocus={() => {
+                      const list = getSpeciesListForGroup(form.groupe)
+                      if (list.length > 0) setEspeceOpen(true)
+                      const scrollEl = modalScrollRef.current
+                      const fieldEl = especeRef.current
+                      if (scrollEl && fieldEl) {
+                        const scrollRect = scrollEl.getBoundingClientRect()
+                        const fieldRect = fieldEl.getBoundingClientRect()
+                        const topOffset = fieldRect.top - scrollRect.top + scrollEl.scrollTop
+                        scrollEl.scrollTo({ top: Math.max(0, topOffset - 12), behavior: 'smooth' })
+                      }
+                    }}
+                    className={`${inputClass} pr-9`}
+                    placeholder={
+                      getSpeciesListForGroup(form.groupe).length === 0
+                        ? 'Saisissez le nom de l\'espèce'
+                        : 'Tapez pour rechercher une espèce…'
+                    }
+                    autoComplete="off"
+                  />
                   <button
                     type="button"
-                    onClick={() => setEspeceAutreMode(false)}
-                    className={`text-xs ${isLight ? 'text-sky-600 hover:text-sky-700' : 'text-sky-400 hover:text-sky-300'}`}
+                    onClick={() => {
+                      setForm((f) => ({ ...f, nom_espece: '' }))
+                      setSpeciesQuery('')
+                      setEspeceOpen(false)
+                    }}
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full transition-colors ${isLight ? 'text-gray-400 hover:bg-gray-200 hover:text-gray-600' : 'text-gray-500 hover:bg-gray-600 hover:text-gray-300'}`}
+                    title={form.nom_espece ? 'Supprimer le choix' : 'Fermer la liste'}
+                    aria-label={form.nom_espece ? 'Supprimer le choix de l\'espèce' : 'Fermer la liste déroulante'}
                   >
-                    Choisir dans la liste {form.groupe === 'Amphibiens' ? 'Amphibiens' : 'Reptiles'}
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                   </button>
+                </div>
+                {especeOpen && form.groupe && (
+                  (() => {
+                    const list = getSpeciesListForGroup(form.groupe)
+                    const q = (speciesQuery || form.nom_espece || '').trim().toLowerCase()
+                    const filtered = q
+                      ? list.filter((name) => name.toLowerCase().includes(q)).slice(0, 80)
+                      : list.slice(0, 80)
+                    const isLoading = form.groupe !== 'Amphibiens' && form.groupe !== 'Reptiles' && speciesByGroup == null
+                    return (
+                      <div
+                        className={`absolute left-0 right-0 top-full z-30 mt-1 rounded-xl border shadow-lg overflow-hidden max-h-56 overflow-y-auto ${
+                          isLight ? 'bg-white border-gray-200 shadow-gray-200/50' : 'bg-gray-800 border-gray-600 shadow-black/30'
+                        }`}
+                      >
+                        {isLoading ? (
+                          <div className={`px-4 py-3 text-sm ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
+                            Chargement des espèces…
+                          </div>
+                        ) : filtered.length === 0 ? (
+                          <div className={`px-4 py-3 text-sm ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {list.length === 0
+                              ? 'Liste vide pour ce groupe. Saisissez le nom de l\'espèce ci-dessus (référentiel à compléter : voir scripts/rebuild-taxon-filtered.cjs).'
+                              : q
+                                ? `Aucune espèce ne contient « ${speciesQuery.trim()} ». Affinez votre recherche.`
+                                : 'Tapez pour filtrer les espèces.'}
+                          </div>
+                        ) : (
+                          filtered.map((name) => (
+                            <button
+                              key={name}
+                              type="button"
+                              onClick={() => {
+                                setForm((f) => ({ ...f, nom_espece: name }))
+                                setSpeciesQuery('')
+                                setEspeceOpen(false)
+                              }}
+                              className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 ${
+                                form.nom_espece === name
+                                  ? isLight ? 'bg-teal-50 text-teal-800' : 'bg-teal-900/30 text-teal-200'
+                                  : isLight ? 'hover:bg-gray-50 text-gray-800' : 'hover:bg-gray-700/80 text-gray-200'
+                              }`}
+                            >
+                              {form.nom_espece === name && (
+                                <svg className="w-4 h-4 shrink-0 text-teal-600" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                              <span>{name}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )
+                  })()
                 )}
-                <input
-                  type="text"
-                  value={form.nom_espece}
-                  onChange={(e) => setForm((f) => ({ ...f, nom_espece: e.target.value }))}
-                  className={inputClass}
-                  placeholder="Nom de l'espèce"
-                />
-              </div>
+              </>
             )}
+            </div>
           </div>
 
           <div>
+            <div className={voiceFieldClass('effectif') || undefined}>
             <div className={labelRowClass}>
               <label className={labelClass}>Effectif</label>
               <button type="button" onClick={() => togglePin('effectif')} title={pinButtonTitle('effectif')} className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-200' : 'hover:bg-gray-700'}`} aria-label={pinButtonTitle('effectif')}>
@@ -1035,18 +1423,22 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
               </button>
             </div>
             <input
-              type="number"
-              min={0}
-              step={1}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={form.effectif}
-              onChange={(e) => setForm((f) => ({ ...f, effectif: e.target.value }))}
+              onChange={(e) => {
+                const v = e.target.value.replace(/\D/g, '')
+                setForm((f) => ({ ...f, effectif: v }))
+              }}
               className={inputClass}
               placeholder="Nombre (optionnel)"
-              inputMode="numeric"
             />
+            </div>
           </div>
 
           <div ref={stadeRef} className="relative">
+            <div className={voiceFieldClass('stade') || undefined}>
             <div className={labelRowClass}>
               <label className={labelClass}>Stade</label>
               <button type="button" onClick={() => togglePin('stade')} title={pinButtonTitle('stade')} className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-200' : 'hover:bg-gray-700'}`} aria-label={pinButtonTitle('stade')}>
@@ -1104,9 +1496,11 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                 )}
               </>
             )}
+            </div>
           </div>
 
           <div ref={sexeRef} className="relative">
+            <div className={voiceFieldClass('sexe') || undefined}>
             <div className={labelRowClass}>
               <label className={labelClass}>Sexe</label>
               <button type="button" onClick={() => togglePin('sexe')} title={pinButtonTitle('sexe')} className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-200' : 'hover:bg-gray-700'}`} aria-label={pinButtonTitle('sexe')}>
@@ -1164,9 +1558,11 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                 )}
               </>
             )}
+            </div>
           </div>
 
           <div>
+            <div className={voiceFieldClass('remarques') || undefined}>
             <div className={labelRowClass}>
               <label className={labelClass}>Remarques</label>
               <button type="button" onClick={() => togglePin('remarques')} title={pinButtonTitle('remarques')} className={`p-1.5 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-200' : 'hover:bg-gray-700'}`} aria-label={pinButtonTitle('remarques')}>
@@ -1180,6 +1576,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
               placeholder="Remarques"
               rows={3}
             />
+            </div>
           </div>
 
           {/* Photos */}
@@ -1367,14 +1764,14 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
               aria-live="polite"
             >
               <div
-                className={`flex flex-col items-center gap-3 rounded-lg px-8 py-6 shadow-xl ${
+                className={`flex flex-col items-center gap-3 rounded-lg px-8 py-6 shadow-xl text-center ${
                   isLight ? 'bg-white text-emerald-600' : 'bg-gray-800 text-emerald-400'
                 }`}
               >
                 <svg className="w-14 h-14 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
-                <span className="text-lg font-semibold">Donnée enregistrée</span>
+                <span className="text-lg font-semibold">{successMessage ?? 'Donnée enregistrée'}</span>
               </div>
             </div>
           )}
@@ -1404,8 +1801,81 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
             </button>
           </div>
         </div>
+        </div>
       </div>
     </div>
+    {/* Modale d'info Données opportunistes */}
+    {showDonneesOpportunistesInfo && (
+      <div
+        className="fixed inset-0 z-[102] flex items-center justify-center p-4 bg-black/50"
+        onClick={() => setShowDonneesOpportunistesInfo(false)}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="donnees-opportunistes-info-title"
+      >
+        <div
+          className={`relative w-full max-w-md rounded-xl shadow-xl border p-5 ${
+            isLight ? 'bg-white border-gray-200' : 'bg-gray-800 border-gray-600'
+          }`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 id="donnees-opportunistes-info-title" className={`text-lg font-semibold mb-3 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            Données opportunistes
+          </h3>
+          <p className={`text-sm ${isLight ? 'text-gray-700' : 'text-gray-300'} leading-relaxed`}>
+            Choisissez <strong>« Données opportunistes »</strong> lorsque vous souhaitez saisir une observation réalisée à l’occasion d’une balade ou d’une sortie sur le terrain, sans suivre un protocole scientifique défini (POP, IPA, etc.).
+          </p>
+          <p className={`text-sm mt-3 ${isLight ? 'text-gray-600' : 'text-gray-400'} leading-relaxed`}>
+            Pour les données collectées dans le cadre d’un protocole précis (passages numérotés, sites dédiés, etc.), sélectionnez plutôt le protocole correspondant dans la liste.
+          </p>
+          <div className="mt-5 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowDonneesOpportunistesInfo(false)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${isLight ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-teal-500 text-white hover:bg-teal-600'}`}
+            >
+              Compris
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    {/* Modale d'info Présence / Absence */}
+    {showPresenceInfo && (
+      <div
+        className="fixed inset-0 z-[102] flex items-center justify-center p-4 bg-black/50"
+        onClick={() => setShowPresenceInfo(false)}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="presence-info-title"
+      >
+        <div
+          className={`relative w-full max-w-md rounded-xl shadow-xl border p-5 ${
+            isLight ? 'bg-white border-gray-200' : 'bg-gray-800 border-gray-600'
+          }`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 id="presence-info-title" className={`text-lg font-semibold mb-3 ${isLight ? 'text-gray-900' : 'text-white'}`}>
+            Présence et absence
+          </h3>
+          <p className={`text-sm ${isLight ? 'text-gray-700' : 'text-gray-300'} leading-relaxed`}>
+            Pour certains protocoles (POP, IPA, etc.), il est aussi important de préciser <strong>l’absence</strong> de l’espèce que sa présence. Une absence constatée sur un site ou un passage est une donnée à part entière : elle contribue à la connaissance de la répartition et de l’évolution des populations.
+          </p>
+          <p className={`text-sm mt-3 ${isLight ? 'text-gray-600' : 'text-gray-400'} leading-relaxed`}>
+            Choisissez <strong>« Oui »</strong> si vous avez observé l’espèce, <strong>« Non »</strong> si vous étiez sur le site au moment prévu mais n’avez pas observé l’espèce.
+          </p>
+          <div className="mt-5 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowPresenceInfo(false)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${isLight ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-teal-500 text-white hover:bg-teal-600'}`}
+            >
+              Compris
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <MapPickModal
       isOpen={showMapPicker}
       onClose={() => setShowMapPicker(false)}

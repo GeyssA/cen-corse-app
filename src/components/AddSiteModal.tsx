@@ -3,7 +3,8 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
-import { createSite, getSitesByUser } from '@/lib/sites'
+import { createSite, getSitesByUser, type ObservationSite } from '@/lib/sites'
+import { isOnline, addPendingSite } from '@/lib/offlineQueue'
 import { invalidateMapDataCache } from '@/lib/mapDataCache'
 import { getObservationsByUser } from '@/lib/observations'
 import { uploadPhoto } from '@/lib/uploadPhoto'
@@ -16,7 +17,7 @@ const PROTOCOLE_OPTIONS = [
   { value: 'POPReptile', label: 'POP Reptile' },
   { value: 'POPAmphibien', label: 'POP Amphibien' },
   { value: 'IPA', label: 'IPA' },
-  { value: 'Autre', label: 'Autre' }
+  { value: 'Données opportunistes', label: 'Données opportunistes' }
 ]
 
 function getTodayISO(): string {
@@ -55,6 +56,9 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
   const [sitePositionType, setSitePositionType] = useState<'point' | 'linear'>('point')
   const [existingMapPoints, setExistingMapPoints] = useState<import('./MapPickContent').ExistingMapPoint[]>([])
   const [existingPointsLoaded, setExistingPointsLoaded] = useState(false)
+  const [userSites, setUserSites] = useState<ObservationSite[]>([])
+  const [showSuccessCheck, setShowSuccessCheck] = useState(false)
+  const [successFadeOut, setSuccessFadeOut] = useState(false)
 
   useEffect(() => {
     if (!isOpen || !user?.id) {
@@ -64,6 +68,7 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
     setExistingPointsLoaded(false)
     Promise.all([getSitesByUser(user.id), getObservationsByUser(user.id)])
       .then(([sites, observations]) => {
+        setUserSites(sites)
         const points: import('./MapPickContent').ExistingMapPoint[] = []
         sites.forEach((s) => {
           const lat = s.latitude ?? (s.path_coordinates?.[0]?.[0])
@@ -80,6 +85,7 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
             }
             if (s.path_coordinates && s.path_coordinates.length >= 2) {
               point.path_coordinates = s.path_coordinates
+              if (s.length_meters != null) point.length_meters = s.length_meters
             }
             points.push(point)
           }
@@ -108,6 +114,7 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
         setExistingPointsLoaded(true)
       })
       .catch(() => {
+        setUserSites([])
         setExistingMapPoints([])
         setExistingPointsLoaded(true)
       })
@@ -137,6 +144,7 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
       setDate(getTodayISO())
       setNomDuSite('')
       setProtocole('')
+      setProtocoleOpen(false)
       setSubmitError(null)
       setGeoError(null)
       setPhotoItems((prev) => {
@@ -191,8 +199,8 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
 
   const handleSubmit = async () => {
     setSubmitError(null)
-    if (!protocole) {
-      setSubmitError('Veuillez sélectionner un protocole.')
+    if (!protocole.trim()) {
+      setSubmitError('Veuillez saisir un protocole.')
       return
     }
     if (!nomDuSite.trim()) {
@@ -215,6 +223,34 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
     }
     setSubmitLoading(true)
     try {
+      const lat = isLinear ? pathCoordinates![0][0] : latitude!
+      const lng = isLinear ? pathCoordinates![0][1] : longitude!
+      const payload = {
+        date,
+        protocole: protocole.trim(),
+        nom_du_site: nomDuSite.trim(),
+        user_id: user.id,
+        latitude: lat,
+        longitude: lng,
+        photo_url: undefined as string | null | undefined,
+        path_coordinates: isLinear ? pathCoordinates : null,
+        length_meters: isLinear ? lengthMeters! : null
+      }
+
+      if (!isOnline()) {
+        await addPendingSite(payload, photoItems.map((i) => i.file))
+        setShowSuccessCheck(true)
+        setSuccessFadeOut(false)
+        setTimeout(() => setSuccessFadeOut(true), 1100)
+        setTimeout(() => {
+          setShowSuccessCheck(false)
+          onSuccess?.()
+          onClose()
+        }, 1600)
+        setSubmitLoading(false)
+        return
+      }
+
       const photoUrls: string[] = []
       if (photoItems.length > 0 && user) {
         for (const item of photoItems) {
@@ -228,11 +264,9 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
         }
       }
       const photo_url = serializePhotoUrls(photoUrls) ?? undefined
-      const lat = isLinear ? pathCoordinates![0][0] : latitude!
-      const lng = isLinear ? pathCoordinates![0][1] : longitude!
       const created = await createSite({
         date,
-        protocole,
+        protocole: protocole.trim(),
         nom_du_site: nomDuSite.trim(),
         user_id: user.id,
         latitude: lat,
@@ -243,8 +277,14 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
       })
       if (created) {
         invalidateMapDataCache()
-        onSuccess?.()
-        onClose()
+        setShowSuccessCheck(true)
+        setSuccessFadeOut(false)
+        setTimeout(() => setSuccessFadeOut(true), 1100)
+        setTimeout(() => {
+          setShowSuccessCheck(false)
+          onSuccess?.()
+          onClose()
+        }, 1600)
       } else {
         setSubmitError('Impossible d’enregistrer le site.')
       }
@@ -258,28 +298,20 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div
-        className={`relative w-full max-w-xl max-h-[88vh] overflow-y-auto rounded-lg shadow-xl border ${
-          isLight ? 'bg-white border-gray-200' : 'bg-gray-900 border-gray-700'
-        }`}
-      >
-        <header className={`sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b ${isLight ? 'border-gray-100 bg-white/98' : 'border-gray-800 bg-gray-900/98'} backdrop-blur`}>
-          <h2 className={`text-xl font-semibold tracking-tight ${isLight ? 'text-gray-900' : 'text-white'}`}>
+    <>
+    <div className={`fixed inset-0 z-[100] flex flex-col safe-area-modal ${isLight ? 'bg-slate-50' : 'bg-gray-950'}`} role="dialog" aria-modal="true" aria-labelledby="add-site-modal-title">
+      <div className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden">
+        <div className={`relative w-full min-h-full ${isLight ? 'bg-white border-gray-200' : 'bg-gray-900 border-gray-700'}`}>
+        <header className={`sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6 py-4 border-b ${isLight ? 'border-gray-200 bg-white' : 'border-gray-700 bg-gray-900'}`}>
+          <h2 id="add-site-modal-title" className={`text-xl font-semibold tracking-tight ${isLight ? 'text-gray-900' : 'text-white'}`}>
             Nouveau site d’observation
           </h2>
-          <button
-            onClick={onClose}
-            className={`p-2 -m-2 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-gray-800 text-gray-400'}`}
-            aria-label="Fermer"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+          <button onClick={onClose} className={`p-2 -m-2 rounded-lg transition-colors ${isLight ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-gray-800 text-gray-400'}`} aria-label="Fermer">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </header>
 
-        <div className="px-6 py-5 space-y-6">
+        <div className="px-4 sm:px-6 py-5 pb-8 max-w-2xl mx-auto space-y-6">
           <section>
             <h3 className={`${sectionTitleClass} mb-3`}>Identification</h3>
             <div className="space-y-4">
@@ -310,38 +342,59 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
 
           <div ref={protocoleRef} className="relative">
             <label className={labelClass}>Protocole</label>
-            <button
-              type="button"
-              onClick={() => setProtocoleOpen((o) => !o)}
-              className={`${inputClass} flex items-center justify-between gap-2 text-left cursor-pointer`}
-            >
-              <span className={protocole ? (isLight ? 'text-gray-900' : 'text-gray-100') : (isLight ? 'text-gray-500' : 'text-gray-400')}>
-                {protocole ? PROTOCOLE_OPTIONS.find((o) => o.value === protocole)?.label ?? protocole : 'Sélectionner un protocole…'}
-              </span>
-              <svg
-                className={`w-4 h-4 shrink-0 transition-transform duration-200 ${protocoleOpen ? 'rotate-180' : ''} ${isLight ? 'text-gray-400' : 'text-gray-500'}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            <div className={`${inputClass} flex items-center justify-between gap-2`}>
+              <input
+                type="text"
+                value={protocole}
+                onChange={(e) => setProtocole(e.target.value)}
+                onFocus={() => setProtocoleOpen(true)}
+                placeholder="Sélectionner ou saisir un protocole…"
+                className={`flex-1 min-w-0 bg-transparent border-none outline-none py-0.5 ${protocole ? (isLight ? 'text-gray-800' : 'text-gray-100') : (isLight ? 'text-gray-500' : 'text-gray-400')}`}
+                aria-expanded={protocoleOpen}
+                aria-haspopup="listbox"
+                aria-controls="protocole-listbox"
+                id="protocole-input"
+              />
+              {protocole ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProtocole('')
+                    setProtocoleOpen(false)
+                  }}
+                  className={`p-1.5 rounded-md transition-colors shrink-0 ${isLight ? 'text-gray-400 hover:bg-gray-100 hover:text-gray-600' : 'text-gray-500 hover:bg-gray-700 hover:text-gray-300'}`}
+                  aria-label="Effacer le protocole"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setProtocoleOpen((o) => !o)}
+                className={`p-1.5 shrink-0 rounded-md transition-transform duration-200 ${protocoleOpen ? 'rotate-180' : ''} ${isLight ? 'text-gray-500' : 'text-gray-400'}`}
+                aria-label={protocoleOpen ? 'Fermer la liste' : 'Ouvrir la liste'}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+            </div>
             {protocoleOpen && (
               <div
-                className={`absolute left-0 right-0 top-full mt-1 z-20 rounded-lg border shadow-lg overflow-hidden ${
-                  isLight ? 'bg-white border-gray-200' : 'bg-gray-800 border-gray-600'
+                id="protocole-listbox"
+                role="listbox"
+                className={`absolute left-0 right-0 top-full mt-1 z-20 rounded-xl border shadow-lg overflow-hidden ${
+                  isLight ? 'bg-white border-gray-200 shadow-gray-200/50' : 'bg-gray-800 border-gray-600 shadow-black/30'
                 }`}
               >
-                {PROTOCOLE_OPTIONS.map((opt) => (
+                {PROTOCOLE_OPTIONS.filter((opt) => !protocole || opt.label.toLowerCase().includes(protocole.toLowerCase()) || opt.value.toLowerCase().includes(protocole.toLowerCase())).map((opt) => (
                   <button
                     key={opt.value}
                     type="button"
+                    role="option"
                     onClick={() => {
                       setProtocole(opt.value)
                       setProtocoleOpen(false)
                     }}
-                    className={`w-full px-3.5 py-2.5 text-left text-sm transition-colors flex items-center gap-2 ${
+                    className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 ${
                       protocole === opt.value
                         ? isLight ? 'bg-teal-50 text-teal-800' : 'bg-teal-900/30 text-teal-200'
                         : isLight ? 'hover:bg-gray-50 text-gray-800' : 'hover:bg-gray-700/80 text-gray-200'
@@ -368,6 +421,28 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
               className={inputClass}
               placeholder="Ex. Mare Sud, Transect A…"
             />
+            {nomDuSite.trim() && (() => {
+              const q = nomDuSite.trim().toLowerCase()
+              const matching = userSites.filter((s) => s.nom_du_site.toLowerCase().includes(q))
+              if (matching.length === 0) return null
+              return (
+                <div className={`mt-2 rounded-lg border px-3 py-2 ${isLight ? 'bg-gray-50 border-gray-200' : 'bg-gray-800/50 border-gray-600'}`}>
+                  <p className={`text-xs font-medium mb-1.5 ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
+                    Sites existants contenant « {nomDuSite.trim()} » (à titre indicatif, non cliquables)
+                  </p>
+                  <ul className="space-y-1" aria-hidden>
+                    {matching.slice(0, 10).map((s) => (
+                      <li key={s.id} className={`text-sm ${isLight ? 'text-gray-600' : 'text-gray-300'} pointer-events-none select-none`}>
+                        {s.nom_du_site}
+                      </li>
+                    ))}
+                    {matching.length > 10 && (
+                      <li className={`text-xs ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>… et {matching.length - 10} autre(s)</li>
+                    )}
+                  </ul>
+                </div>
+              )
+            })()}
           </div>
             </div>
           </section>
@@ -610,6 +685,27 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
             </p>
           )}
 
+          {showSuccessCheck && (
+            <div
+              className={`fixed inset-0 z-[101] flex items-center justify-center p-4 pointer-events-none transition-opacity duration-300 ${
+                successFadeOut ? 'opacity-0' : 'opacity-100'
+              }`}
+              role="status"
+              aria-live="polite"
+            >
+              <div
+                className={`flex flex-col items-center gap-3 rounded-lg px-8 py-6 shadow-xl ${
+                  isLight ? 'bg-white text-emerald-600' : 'bg-gray-800 text-emerald-400'
+                }`}
+              >
+                <svg className="w-14 h-14 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="text-lg font-semibold">Site enregistré</span>
+              </div>
+            </div>
+          )}
+
           <footer className={`flex gap-3 pt-4 pb-1 border-t ${isLight ? 'border-gray-100' : 'border-gray-800'}`}>
             <button
               type="button"
@@ -628,8 +724,10 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
             </button>
           </footer>
         </div>
+        </div>
       </div>
-      <MapPickModal
+    </div>
+    <MapPickModal
         isOpen={showMapPicker}
         onClose={() => setShowMapPicker(false)}
         initialCenter={latitude != null && longitude != null ? [latitude, longitude] : undefined}
@@ -661,6 +759,6 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess }: AddSiteModa
           setShowLinePicker(false)
         }}
       />
-    </div>
+    </>
   )
 }

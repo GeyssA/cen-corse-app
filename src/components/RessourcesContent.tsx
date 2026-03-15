@@ -499,27 +499,33 @@ const SupportModal = memo(function SupportModal({
 
   if (!isOpen || !support) return null
 
+  const topSafe = 'max(1rem, env(safe-area-inset-top, 0px))'
+  const bottomSafe = 'max(1rem, env(safe-area-inset-bottom, 0px))'
+  const leftSafe = 'max(1rem, env(safe-area-inset-left, 0px))'
+  const rightSafe = 'max(1rem, env(safe-area-inset-right, 0px))'
+
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center">
-      {/* Bouton fermer */}
-          <button
-            onClick={onClose}
-        className="absolute top-4 right-4 z-20 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+      {/* Bouton fermer — respecte la barre système */}
+      <button
+        onClick={onClose}
+        className="absolute z-20 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors"
+        style={{ top: topSafe, right: rightSafe }}
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
 
       {/* Indicateur de zoom */}
       {scale > 1 && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm text-white text-sm font-medium">
+        <div className="absolute left-1/2 transform -translate-x-1/2 z-20 px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm text-white text-sm font-medium" style={{ top: topSafe }}>
           {Math.round(scale * 100)}%
         </div>
       )}
 
-      {/* Boutons de contrôle zoom */}
-      <div className="absolute top-4 left-4 z-20 flex flex-col gap-2">
+      {/* Boutons de contrôle zoom — respectent la barre système */}
+      <div className="absolute left-4 z-20 flex flex-col gap-2" style={{ top: topSafe }}>
         <button
           onClick={() => {
             const newScale = Math.min(scale + 0.5, 5)
@@ -560,10 +566,11 @@ const SupportModal = memo(function SupportModal({
 
       {/* Navigation gauche */}
       {support.images && support.images.length > 1 && (
-                    <button
-                      onClick={handlePrevImage}
-          className="absolute left-4 top-1/2 transform -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors"
-                    >
+        <button
+          onClick={handlePrevImage}
+          className="absolute top-1/2 transform -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors"
+          style={{ left: leftSafe }}
+        >
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                       </svg>
@@ -572,10 +579,11 @@ const SupportModal = memo(function SupportModal({
 
       {/* Navigation droite */}
       {support.images && support.images.length > 1 && (
-                    <button
-                      onClick={handleNextImage}
-          className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors"
-                    >
+        <button
+          onClick={handleNextImage}
+          className="absolute top-1/2 transform -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors"
+          style={{ right: rightSafe }}
+        >
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
@@ -649,7 +657,7 @@ const SupportModal = memo(function SupportModal({
 
       {/* Compteur de pages */}
       {support.images && support.images.length > 1 && (
-        <div className="absolute bottom-4 right-4 text-white text-sm bg-black/50 px-3 py-1 rounded-full">
+        <div className="absolute right-4 text-white text-sm bg-black/50 px-3 py-1 rounded-full" style={{ bottom: bottomSafe }}>
           {currentImageIndex + 1} / {support.images.length}
         </div>
       )}

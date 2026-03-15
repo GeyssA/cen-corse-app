@@ -16,7 +16,7 @@ const DEFAULT_ZOOM = 8
 
 type MapPoint =
   | { type: 'user'; id: string; latitude: number; longitude: number; label?: string }
-  | { type: 'site'; id: string; latitude: number; longitude: number; nom_du_site: string; protocole: string; date?: string; path_coordinates?: [number, number][] }
+  | { type: 'site'; id: string; latitude: number; longitude: number; nom_du_site: string; protocole: string; date?: string; path_coordinates?: [number, number][]; length_meters?: number | null }
   | { type: 'observation'; id: string; latitude: number; longitude: number; date: string; nom_espece: string; site: string; protocole?: string; groupe?: string; effectif?: string; stade?: string; sexe?: string; remarques?: string; observateur?: string }
 
 // Carte Leaflet chargée côté client uniquement (évite erreurs SSR)
@@ -98,6 +98,7 @@ export default function ObservationsSitesMapModal({ isOpen, onClose }: Observati
           }
           if (s.path_coordinates && s.path_coordinates.length >= 2) {
             sitePoint.path_coordinates = s.path_coordinates
+            if (s.length_meters != null) sitePoint.length_meters = s.length_meters
           }
           newPoints.push(sitePoint)
         }
@@ -144,7 +145,7 @@ export default function ObservationsSitesMapModal({ isOpen, onClose }: Observati
   })()
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex flex-col bg-black/60 backdrop-blur-sm safe-area-modal">
       <div
         className={`flex items-center justify-between px-4 py-3 border-b shrink-0 ${
           isLight ? 'bg-white border-gray-200' : 'bg-gray-900 border-gray-700'

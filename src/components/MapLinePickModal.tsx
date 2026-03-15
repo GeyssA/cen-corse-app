@@ -78,7 +78,7 @@ export default function MapLinePickModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-[102] flex flex-col bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[102] flex flex-col bg-black/70 backdrop-blur-sm safe-area-modal">
       <div
         className={`flex items-center justify-between px-4 py-3 border-b shrink-0 ${
           isLight ? 'bg-white border-gray-200' : 'bg-gray-900 border-gray-700'

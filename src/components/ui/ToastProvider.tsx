@@ -85,7 +85,7 @@ function ToastContainer({ toasts, onHide }: ToastContainerProps) {
   if (toasts.length === 0) return null
 
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm w-full">
+    <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 space-y-2 max-w-sm w-full px-4">
       {toasts.map(toast => (
         <ToastItem key={toast.id} toast={toast} onHide={onHide} />
       ))}
@@ -102,14 +102,14 @@ function ToastItem({ toast, onHide }: ToastItemProps) {
   const getToastStyles = () => {
     switch (toast.type) {
       case 'success':
-        return 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200'
+        return 'bg-green-100 border-2 border-green-300 text-green-900 dark:bg-green-900 dark:border-green-600 dark:text-green-100'
       case 'error':
-        return 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200'
+        return 'bg-red-100 border-2 border-red-300 text-red-900 dark:bg-red-900 dark:border-red-600 dark:text-red-100'
       case 'warning':
-        return 'bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-200'
+        return 'bg-yellow-100 border-2 border-yellow-300 text-yellow-900 dark:bg-yellow-900 dark:border-yellow-600 dark:text-yellow-100'
       case 'info':
       default:
-        return 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-200'
+        return 'bg-blue-100 border-2 border-blue-300 text-blue-900 dark:bg-blue-900 dark:border-blue-600 dark:text-blue-100'
     }
   }
 

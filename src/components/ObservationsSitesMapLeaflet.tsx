@@ -6,7 +6,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { watchPosition } from '@/lib/geolocation'
 import { createUserPositionIcon, createCircleIcon } from '@/lib/mapIcons'
-import { MapScale, MapLegend } from '@/components/MapControls'
+import { MapScale, MapLegend, BASE_LAYERS, MapBaseLayerSwitcher, LINEAR_SITE_PATH_OPTIONS, LINEAR_SITE_HIT_WEIGHT, type BaseLayerId } from '@/components/MapControls'
 import type { MapPoint } from './ObservationsSitesMapModal'
 
 // Fix des icônes Leaflet avec Next.js / webpack
@@ -83,6 +83,7 @@ const DEFAULT_ZOOM = 8
 
 export default function ObservationsSitesMapLeaflet({ points, initialCenter }: ObservationsSitesMapLeafletProps) {
   const [livePosition, setLivePosition] = useState<[number, number] | null>(null)
+  const [baseLayerId, setBaseLayerId] = useState<BaseLayerId>('osm')
 
   useEffect(() => {
     const unsubscribe = watchPosition(
@@ -120,17 +121,18 @@ export default function ObservationsSitesMapLeaflet({ points, initialCenter }: O
         scrollWheelZoom
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          key={baseLayerId}
+          attribution={BASE_LAYERS[baseLayerId].attribution}
+          url={BASE_LAYERS[baseLayerId].url}
         />
         <MapScale />
         {boundsPositions.length > 0 && <FitBounds positions={boundsPositions} />}
       {livePosition && (
         <Marker position={livePosition} icon={USER_ICON}>
           <Popup closeButton>
-            <div className="p-1 min-w-[140px] text-sm">
+            <div className="py-0.5 px-1.5 min-w-[140px] text-xs leading-none">
               <p className="font-semibold text-blue-600">Ma position</p>
-              <p className="text-xs text-gray-500">Position GPS actuelle</p>
+              <p className="text-gray-500">Position GPS actuelle</p>
             </div>
           </Popup>
         </Marker>
@@ -138,15 +140,24 @@ export default function ObservationsSitesMapLeaflet({ points, initialCenter }: O
       {linearSites.map((site) => {
         const pathPositions = site.path_coordinates.map((pt) => [pt[0], pt[1]] as [number, number])
         return (
-          <Polyline key={`site-line-${site.id}`} positions={pathPositions} pathOptions={{ color: '#10b981', weight: 4 }}>
-            <Popup closeButton>
-              <div className="p-2 min-w-[200px] text-sm space-y-1.5">
-                <p className="font-semibold text-emerald-800 border-b border-emerald-200 pb-1">Site linéaire – {site.nom_du_site}</p>
-                <p className="text-gray-600"><span className="font-medium">Protocole :</span> {site.protocole}</p>
-                {site.date && <p className="text-gray-500 text-xs">Créé le {site.date}</p>}
-              </div>
-            </Popup>
-          </Polyline>
+          <React.Fragment key={`site-line-${site.id}`}>
+            <Polyline positions={pathPositions} pathOptions={LINEAR_SITE_PATH_OPTIONS} />
+            <Polyline
+              positions={pathPositions}
+              pathOptions={{ color: 'transparent', weight: LINEAR_SITE_HIT_WEIGHT }}
+            >
+              <Popup closeButton>
+                <div className="py-0.5 px-1.5 min-w-[200px] text-xs leading-none">
+                  <p className="font-semibold text-red-800 border-b border-red-200 pb-px">Site linéaire – {site.nom_du_site}</p>
+                  <p className="text-gray-600"><span className="font-medium">Protocole :</span> {site.protocole}</p>
+                  {(site as { length_meters?: number | null }).length_meters != null && (
+                    <p className="text-red-600 font-medium">Longueur : {(site as { length_meters: number }).length_meters.toFixed(1)} m</p>
+                  )}
+                  {site.date && <p className="text-gray-500">Créé le {site.date}</p>}
+                </div>
+              </Popup>
+            </Polyline>
+          </React.Fragment>
         )
       })}
       {pointsToShow.map(({ point, displayLat, displayLng }) => {
@@ -161,35 +172,34 @@ export default function ObservationsSitesMapLeaflet({ points, initialCenter }: O
           >
             <Popup closeButton>
               {point.type === 'user' && (
-                <div className="p-1 min-w-[140px] text-sm">
+                <div className="py-0.5 px-1.5 min-w-[140px] text-xs leading-none">
                   <p className="font-semibold text-blue-600">Ma position</p>
-                  <p className="text-xs text-gray-500">Position GPS actuelle</p>
+                  <p className="text-gray-500">Position GPS actuelle</p>
                 </div>
               )}
               {point.type === 'site' && (
-                <div className="p-2 min-w-[200px] text-sm space-y-1.5">
-                  <p className="font-semibold text-emerald-800 border-b border-emerald-200 pb-1">{(point as any).nom_du_site}</p>
+                <div className="py-0.5 px-1.5 min-w-[200px] text-xs leading-none">
+                  <p className="font-semibold text-emerald-800 border-b border-emerald-200 pb-px">{(point as any).nom_du_site}</p>
                   <p className="text-gray-600"><span className="font-medium">Protocole :</span> {(point as any).protocole}</p>
-                  {(point as any).date && <p className="text-gray-500 text-xs">Créé le {(point as any).date}</p>}
-                  <p className="text-xs text-emerald-600 font-medium pt-0.5">Site d’observation</p>
+                  {(point as any).date && <p className="text-gray-500">Créé le {(point as any).date}</p>}
+                  <p className="text-emerald-600 font-medium">Site d’observation</p>
                 </div>
               )}
               {point.type === 'observation' && (
-                <div className="p-2 min-w-[220px] text-sm space-y-1.5">
-                  <p className="font-semibold text-amber-800 border-b border-amber-200 pb-1">{(point as any).nom_espece || '—'}</p>
-                  <p className="text-gray-600"><span className="font-medium">Date :</span> {(point as any).date}</p>
-                  <p className="text-gray-600"><span className="font-medium">Site :</span> {(point as any).site || '—'}</p>
-                  {(point as any).protocole && <p className="text-gray-500 text-xs"><span className="font-medium">Protocole :</span> {(point as any).protocole}</p>}
-                  {(point as any).groupe && <p className="text-gray-500 text-xs"><span className="font-medium">Groupe :</span> {(point as any).groupe}</p>}
-                  {(point as any).effectif && <p className="text-gray-500 text-xs"><span className="font-medium">Effectif :</span> {(point as any).effectif}</p>}
+                <div className="py-0.5 px-1.5 min-w-[220px] text-xs leading-none">
+                  <p className="font-semibold text-amber-800 border-b border-amber-200 pb-px">{(point as any).nom_espece || '—'}</p>
+                  <p className="text-gray-600"><span className="font-medium">Date :</span> {(point as any).date} · <span className="font-medium">Site :</span> {(point as any).site || '—'}</p>
+                  {(point as any).protocole && <p className="text-gray-500"><span className="font-medium">Protocole :</span> {(point as any).protocole}</p>}
+                  {(point as any).groupe && <p className="text-gray-500"><span className="font-medium">Groupe :</span> {(point as any).groupe}</p>}
+                  {(point as any).effectif && <p className="text-gray-500"><span className="font-medium">Effectif :</span> {(point as any).effectif}</p>}
                   {((point as any).stade || (point as any).sexe) && (
-                    <p className="text-gray-500 text-xs">
+                    <p className="text-gray-500">
                       {[(point as any).stade, (point as any).sexe].filter(Boolean).join(' • ')}
                     </p>
                   )}
-                  {(point as any).observateur && <p className="text-gray-400 text-xs italic">{(point as any).observateur}</p>}
-                  {(point as any).remarques && <p className="text-gray-500 text-xs mt-1 border-t border-gray-100 pt-1">{(point as any).remarques}</p>}
-                  <p className="text-xs text-amber-600 font-medium pt-0.5">Observation</p>
+                  {(point as any).observateur && <p className="text-gray-400 italic">{(point as any).observateur}</p>}
+                  {(point as any).remarques && <p className="text-gray-500 border-t border-gray-100 pt-px mt-px">{(point as any).remarques}</p>}
+                  <p className="text-amber-600 font-medium">Observation</p>
                 </div>
               )}
             </Popup>
@@ -197,7 +207,8 @@ export default function ObservationsSitesMapLeaflet({ points, initialCenter }: O
         )
       })}
       </MapContainer>
-      <MapLegend dark />
+      <MapBaseLayerSwitcher currentLayer={baseLayerId} onChange={setBaseLayerId} dark />
+      <MapLegend dark showLinearSites={linearSites.length > 0} />
     </div>
   )
 }

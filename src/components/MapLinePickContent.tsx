@@ -6,7 +6,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { getCurrentPositionAsync } from '@/lib/geolocation'
 import { createUserPositionIcon, SITE_MARKER_ICON, OBS_MARKER_ICON } from '@/lib/mapIcons'
-import { MapScale, MapLegend } from '@/components/MapControls'
+import { MapScale, MapLegend, BASE_LAYERS, MapBaseLayerSwitcher, LINEAR_SITE_PATH_OPTIONS, LINEAR_SITE_HIT_WEIGHT, type BaseLayerId } from '@/components/MapControls'
 import type { ExistingMapPoint } from './MapPickContent'
 import { spreadExistingPoints } from './MapPickContent'
 
@@ -58,6 +58,7 @@ export default function MapLinePickContent({
   existingPointsLoaded = true
 }: MapLinePickContentProps) {
   const [userPosition, setUserPosition] = useState<[number, number] | null | undefined>(undefined)
+  const [baseLayerId, setBaseLayerId] = useState<BaseLayerId>('osm')
 
   useEffect(() => {
     getCurrentPositionAsync()
@@ -93,6 +94,7 @@ export default function MapLinePickContent({
   }, [ready, userPosition, path, existingPoints, initialCenter])
 
   const hasSites = existingPoints.some((p) => p.type === 'site')
+  const hasLinearSites = existingPoints.some((p) => p.path_coordinates && p.path_coordinates.length >= 2)
   const hasObs = existingPoints.some((p) => p.type === 'observation')
   const spreadPoints = useMemo(() => spreadExistingPoints(existingPoints), [existingPoints])
 
@@ -113,8 +115,9 @@ export default function MapLinePickContent({
         scrollWheelZoom
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          key={baseLayerId}
+          attribution={BASE_LAYERS[baseLayerId].attribution}
+          url={BASE_LAYERS[baseLayerId].url}
         />
         <MapScale />
         {initialBoundsPositions.length > 0 && <FitBoundsOnce positions={initialBoundsPositions} />}
@@ -122,7 +125,7 @@ export default function MapLinePickContent({
         {userPosition && (
           <Marker position={userPosition} icon={createUserPositionIcon()}>
             <Popup closeButton>
-              <div className="p-1 min-w-[120px] text-sm">
+              <div className="py-0.5 px-1.5 min-w-[120px] text-xs leading-none">
                 <p className="font-semibold text-blue-600">Ma position</p>
               </div>
             </Popup>
@@ -132,19 +135,22 @@ export default function MapLinePickContent({
           if (p.path_coordinates && p.path_coordinates.length >= 2) {
             const pathPositions = p.path_coordinates.map((pt) => [pt[0], pt[1]] as [number, number])
             return (
-              <Polyline
-                key={`${p.type}-${p.id}`}
-                positions={pathPositions}
-                pathOptions={{ color: '#10b981', weight: 4 }}
-              >
-                <Popup closeButton>
-                  <div className="p-2 min-w-[200px] text-sm space-y-1.5">
-                    <p className="font-semibold text-emerald-800 border-b border-emerald-200 pb-1">Site linéaire – {p.nom_du_site || '—'}</p>
-                    <p className="text-gray-600"><span className="font-medium">Protocole :</span> {p.protocole || '—'}</p>
-                    {p.date && <p className="text-gray-500 text-xs">Créé le {p.date}</p>}
-                  </div>
-                </Popup>
-              </Polyline>
+              <React.Fragment key={`${p.type}-${p.id}`}>
+                <Polyline positions={pathPositions} pathOptions={LINEAR_SITE_PATH_OPTIONS} />
+                <Polyline
+                  positions={pathPositions}
+                  pathOptions={{ color: 'transparent', weight: LINEAR_SITE_HIT_WEIGHT }}
+                >
+                  <Popup closeButton>
+                    <div className="py-0.5 px-1.5 min-w-[200px] text-xs leading-none">
+                      <p className="font-semibold text-red-800 border-b border-red-200 pb-px">Site linéaire – {p.nom_du_site || '—'}</p>
+                      <p className="text-gray-600"><span className="font-medium">Protocole :</span> {p.protocole || '—'}</p>
+                      {p.length_meters != null && <p className="text-red-600 font-medium text-xs">Longueur : {p.length_meters.toFixed(1)} m</p>}
+                      {p.date && <p className="text-gray-500 text-xs">Créé le {p.date}</p>}
+                    </div>
+                  </Popup>
+                </Polyline>
+              </React.Fragment>
             )
           }
           return null
@@ -157,15 +163,15 @@ export default function MapLinePickContent({
           >
             <Popup closeButton>
               {p.type === 'site' ? (
-                <div className="p-2 min-w-[200px] text-sm space-y-1.5">
-                  <p className="font-semibold text-emerald-800 border-b border-emerald-200 pb-1">{p.nom_du_site || '—'}</p>
+                <div className="py-0.5 px-1.5 min-w-[200px] text-xs leading-none">
+                  <p className="font-semibold text-emerald-800 border-b border-emerald-200 pb-px">{p.nom_du_site || '—'}</p>
                   <p className="text-gray-600"><span className="font-medium">Protocole :</span> {p.protocole || '—'}</p>
                   {p.date && <p className="text-gray-500 text-xs">Créé le {p.date}</p>}
-                  <p className="text-xs text-emerald-600 font-medium pt-0.5">Site d’observation</p>
+                  <p className="text-xs text-emerald-600 font-medium">Site d’observation</p>
                 </div>
               ) : (
-                <div className="p-2 min-w-[220px] text-sm space-y-1.5">
-                  <p className="font-semibold text-amber-800 border-b border-amber-200 pb-1">{p.nom_espece || '—'}</p>
+                <div className="py-0.5 px-1.5 min-w-[220px] text-xs leading-none">
+                  <p className="font-semibold text-amber-800 border-b border-amber-200 pb-px">{p.nom_espece || '—'}</p>
                   <p className="text-gray-600"><span className="font-medium">Date :</span> {p.date || '—'}</p>
                   <p className="text-gray-600"><span className="font-medium">Site :</span> {p.site || '—'}</p>
                   {p.protocole && <p className="text-gray-500 text-xs"><span className="font-medium">Protocole :</span> {p.protocole}</p>}
@@ -177,8 +183,8 @@ export default function MapLinePickContent({
                     </p>
                   )}
                   {p.observateur && <p className="text-gray-400 text-xs italic">{p.observateur}</p>}
-                  {p.remarques && <p className="text-gray-500 text-xs mt-1 border-t border-gray-100 pt-1">{p.remarques}</p>}
-                  <p className="text-xs text-amber-600 font-medium pt-0.5">Observation</p>
+                  {p.remarques && <p className="text-gray-500 text-xs mt-px border-t border-gray-100 pt-px">{p.remarques}</p>}
+                  <p className="text-xs text-amber-600 font-medium">Observation</p>
                 </div>
               )}
             </Popup>
@@ -194,7 +200,8 @@ export default function MapLinePickContent({
         <Marker key={i} position={pos} />
       ))}
       </MapContainer>
-      <MapLegend showUser showSites={hasSites} showObs={hasObs} dark />
+      <MapBaseLayerSwitcher currentLayer={baseLayerId} onChange={setBaseLayerId} dark />
+      <MapLegend showUser showSites={hasSites} showObs={hasObs} showLinearSites={hasLinearSites} dark />
     </div>
   )
 }

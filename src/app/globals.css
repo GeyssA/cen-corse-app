@@ -1,6 +1,19 @@
 @import "tailwindcss";
 
-/* Animation bande logos (slider infini) */
+/* Animation de chargement : cubes/carrés (page callback auth) */
+@keyframes callback-cube {
+  0%, 100% {
+    transform: scale(0.85) translateY(0);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.15) translateY(-6px);
+    opacity: 1;
+  }
+}
+.animate-callback-cube {
+  animation: callback-cube 1.2s ease-in-out infinite;
+}
 @keyframes scroll-logos {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
@@ -9,11 +22,98 @@
   animation: scroll-logos 30s linear infinite;
 }
 
-/* Safe-area : ne pas recouvrir la barre système (haut) ni la zone des boutons (bas) */
-.scroll-container {
+/* Contour discret animé pour le bouton saisie vocale (indique cliquable) */
+@keyframes voice-ring {
+  0%, 100% { opacity: 0.4; box-shadow: 0 0 0 1px currentColor; }
+  50% { opacity: 0.8; box-shadow: 0 0 0 2px currentColor; }
+}
+.animate-voice-ring {
+  animation: voice-ring 2.5s ease-in-out infinite;
+}
+
+/* Micro FAB : légère pulsation */
+@keyframes fab-mic-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.95; }
+}
+.animate-fab-mic {
+  animation: fab-mic-pulse 2s ease-in-out infinite;
+}
+
+/* Bandeau header fixe : même couleur que le fond du reste de l'app (gray-900 / slate-100), pas de ligne */
+.app-header-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  /* Hauteur réduite au max + zone safe pour continuité avec la barre système */
+  min-height: 2.75rem;
+  height: calc(2.75rem + env(safe-area-inset-top, 0px));
   padding-top: env(safe-area-inset-top, 0px);
-  /* Réserve pour la barre de navigation fixe + marge lisible au-dessus */
-  padding-bottom: calc(9rem + env(safe-area-inset-bottom, 0px));
+  border: none;
+  box-shadow: none;
+  box-sizing: border-box;
+}
+body.dark-theme .app-header-bar {
+  background-color: #111827; /* gray-900, même que le fond du contenu */
+}
+body.light-theme .app-header-bar {
+  background-color: #f1f5f9;
+}
+.scroll-container {
+  /* Espace réservé pour le bandeau header fixe (logo + UserMenu) */
+  padding-top: calc(2.75rem + env(safe-area-inset-top, 0px));
+  /* Bas : réserve pour la barre d’onglets (autres pages), sans padding excessif */
+  padding-bottom: calc(4.5rem + max(env(safe-area-inset-bottom, 0px), 16px));
+  background-color: #111827;
+}
+body.light-theme .scroll-container {
+  background-color: #f1f5f9;
+}
+
+/* Page d’accueil avec footer (3 lignes) : réserve légèrement plus en bas */
+.scroll-container.has-footer {
+  padding-bottom: calc(3.5rem + max(env(safe-area-inset-bottom, 0px), 16px));
+}
+
+/* Page auth : pas de bandeau. Pas de scroll en bas sur le login ; scroll uniquement sur "Créer un compte" / "Mot de passe oublié" (via body.auth-needs-scroll). Fond = même dégradé que la page. */
+.scroll-container.scroll-container-auth {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: linear-gradient(to bottom right, #111827, #1f2937, #0f172a);
+}
+body.light-theme .scroll-container.scroll-container-auth {
+  background: #f1f5f9;
+}
+body.auth-needs-scroll .scroll-container.scroll-container-auth {
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* Page de chargement (milan) : pleine page, pas de réserve bandeau */
+.scroll-container.scroll-container-loading {
+  padding-top: 0 !important;
+  padding-bottom: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Page Export / validation : pleine page (pas d'espace bandeau, contenu dès le haut) */
+.scroll-container.scroll-container-fullpage {
+  padding-top: 0 !important;
+  padding-bottom: calc(5rem + max(env(safe-area-inset-bottom, 0px), 20px));
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Modales pleine page : bandeaux système les moins hauts possible */
+.safe-area-modal {
+  padding-top: env(safe-area-inset-top, 20px);
+  padding-bottom: env(safe-area-inset-bottom, 32px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 /* Désactiver le pull-to-refresh et le zoom sur PWA */

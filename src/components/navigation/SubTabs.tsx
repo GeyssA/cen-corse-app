@@ -29,7 +29,7 @@ export default function SubTabs({ tabs, activeTab, onTabChange }: SubTabsProps) 
         : 'border-white/10 bg-gray-800/50'
     }`}>
       <div className="w-full flex justify-center">
-        <div className="flex" style={{ width: '411px', margin: '0 auto' }}>
+        <div className="flex rounded-t-2xl overflow-hidden" style={{ width: '411px', margin: '0 auto' }}>
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id
             
@@ -37,7 +37,7 @@ export default function SubTabs({ tabs, activeTab, onTabChange }: SubTabsProps) 
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className={`flex items-center justify-center space-x-2 py-3 text-sm font-medium transition-all duration-200 relative ${
+                className={`flex items-center justify-center space-x-2 py-2 text-sm font-medium transition-all duration-200 relative rounded-t-xl ${
                   isActive
                     ? theme === 'light'
                       ? 'text-blue-600'

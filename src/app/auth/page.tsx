@@ -148,6 +148,13 @@ function AuthPageContent() {
     if (audio) audio.volume = 0.15
   }, [])
 
+  // Activer le scroll du conteneur uniquement sur "Créer un compte" et "Mot de passe oublié" (pas sur le login)
+  useEffect(() => {
+    const needsScroll = authMode === 'signup' || authMode === 'forgot-password'
+    document.body.classList.toggle('auth-needs-scroll', needsScroll)
+    return () => document.body.classList.remove('auth-needs-scroll')
+  }, [authMode])
+
   // Gérer le mute/unmute
   const toggleMute = () => {
     const audio = document.getElementById('birds-audio') as HTMLAudioElement
@@ -162,7 +169,7 @@ function AuthPageContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 pt-6 relative overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-slate-900">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 pt-2 pb-6 relative overflow-x-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-slate-900">
       {/* Bouton mute/unmute en haut à droite */}
       <button
         onClick={toggleMute}
@@ -294,25 +301,25 @@ function AuthPageContent() {
         </div>
       </div>
 
-      <div className="w-full max-w-3xl relative z-10">
+      <div className="w-full max-w-3xl relative z-10 py-2 flex flex-col justify-center">
         {/* Logo et titre épurés */}
-        <div className="text-center mb-10">
-          <div className="flex items-center justify-center mb-6">
+        <div className="text-center mb-4">
+          <div className="flex items-center justify-center mb-4">
             <div className="bg-white rounded-3xl p-2.5 shadow-2xl">
               <img src="/Logo_CENCorse-removebg-preview.png" alt="Logo CEN Corse" className="w-40 h-auto object-contain" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold mb-3 bg-gradient-to-r from-cyan-300 via-blue-300 to-purple-300 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-cyan-300 via-blue-300 to-purple-300 bg-clip-text text-transparent">
             Le journal du CEN Corse
           </h1>
-          <h2 className="text-lg text-gray-300 mb-4">
+          <h2 className="text-lg text-gray-300 mb-0">
             Suivez les projets et rejoignez la communauté
           </h2>
         </div>
 
         {/* Messages de succès/erreur */}
         {message && (
-          <div className="max-w-lg mx-auto mb-6">
+          <div className="max-w-lg mx-auto mb-4">
             <div className={`p-4 rounded-xl border-2 backdrop-blur-sm ${
               message.type === 'success' 
                 ? 'bg-green-500/10 border-green-500/30 text-green-300' 
@@ -337,7 +344,7 @@ function AuthPageContent() {
         )}
 
         {/* Formulaire direct sans cadre */}
-        <div className="max-w-lg mx-auto">
+        <div className="max-w-lg mx-auto flex-shrink-0">
           {authMode === 'login' && (
             <LoginForm 
               onSwitchToSignUp={() => setAuthMode('signup')} 
@@ -352,10 +359,10 @@ function AuthPageContent() {
           )}
         </div>
 
-        {/* Footer épuré */}
-        <div className="mt-10 text-center">
+        {/* Footer épuré — marge raisonnable en bas */}
+        <div className="mt-4 text-center pb-6 flex-shrink-0">
           <p className="text-sm text-gray-400">
-            © 2025 <span className="font-semibold">BukaLab</span>. Tous droits réservés.
+            © 2026 <span className="font-semibold">BukaLab</span>. Tous droits réservés.
           </p>
         </div>
       </div>

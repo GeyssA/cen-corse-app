@@ -74,9 +74,9 @@ const MainNavigation = memo(function MainNavigation() {
         ? 'bg-white/80 border-gray-200' 
         : 'glass-effect border-white/10'
     }`}
-    style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+    style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 24px)' }}
     >
-      <div className="max-w-md mx-auto px-2 py-2">
+      <div className="max-w-md mx-auto px-2 py-1.5">
         <div className="flex w-full">
           {navigationTabs.map((tab) => {
             const isHomeTab = tab.path === '/'
@@ -87,7 +87,7 @@ const MainNavigation = memo(function MainNavigation() {
               <button
                 key={tab.id}
                 onClick={() => handleTabClick(tab.path)}
-                className={`flex-1 flex flex-col items-center justify-center py-3 px-1 rounded-lg transition-all duration-200 ${
+                className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all duration-200 ${
                   isActive
                     ? theme === 'light'
                       ? 'text-blue-600 bg-blue-50'

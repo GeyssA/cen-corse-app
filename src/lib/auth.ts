@@ -31,10 +31,12 @@ export async function createProfile(userId: string, userData: User): Promise<Pro
     }
     // Si pas de account_type spécifié, reste 'visitor' par défaut
     
+    // Connexion Google/OAuth : on ne préremplit pas le nom pour afficher la modale "Prénom Nom"
+    const isOAuthUser = !(userData.user_metadata?.account_type != null)
     const profileData = {
       id: userId,
       email: userData.email,
-      full_name: userData.user_metadata?.full_name || null,
+      full_name: isOAuthUser ? null : (userData.user_metadata?.full_name || null),
       role: role,
       avatar_url: null,
       created_at: new Date().toISOString(),
@@ -59,10 +61,40 @@ export async function createProfile(userId: string, userData: User): Promise<Pro
   }
 }
 
-// Fonction pour obtenir le profil utilisateur - OPTIMISÉE PWA
+const PROFILE_STORAGE_KEY = 'cencorse_profile'
+
+function getProfileFromStorage(userId: string): Profile | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(`${PROFILE_STORAGE_KEY}_${userId}`)
+    if (!raw) return null
+    return JSON.parse(raw) as Profile
+  } catch {
+    return null
+  }
+}
+
+export function saveProfileToStorage(profile: Profile): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(`${PROFILE_STORAGE_KEY}_${profile.id}`, JSON.stringify(profile))
+  } catch {}
+}
+
+// Fonction pour obtenir le profil utilisateur - OPTIMISÉE PWA, avec cache local pour usage hors ligne
 export async function getProfile(userId: string): Promise<Profile | null> {
   try {
     console.log('🔍 [getProfile] Début récupération profil pour:', userId)
+
+    // Hors ligne : retourner le profil en cache pour garder le nom de l'observateur
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const cached = getProfileFromStorage(userId)
+      if (cached) {
+        console.log('✅ [getProfile] Hors ligne, utilisation du profil en cache')
+        return cached
+      }
+      return null
+    }
     
     // Timeout de 8 secondes pour éviter les blocages PWA mais laisser le temps aux connexions lentes
     const timeoutPromise = new Promise<never>((_, reject) => 
@@ -82,7 +114,12 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 
     if (error) {
       console.warn('⚠️ [getProfile] Erreur:', error.code, error.message)
-      
+      // En cas d'erreur réseau, tenter le cache local pour garder le compte utilisable hors ligne
+      const cached = getProfileFromStorage(userId)
+      if (cached) {
+        console.log('✅ [getProfile] Erreur réseau, utilisation du profil en cache')
+        return cached
+      }
       // Si le profil n'existe pas, on essaie de le créer rapidement
       if (error.code === 'PGRST116') { // Code pour "not found"
         console.log('🔧 [getProfile] Profil non trouvé, création rapide...')
@@ -90,16 +127,20 @@ export async function getProfile(userId: string): Promise<Profile | null> {
         if (userData.user) {
           const newProfile = await createProfile(userId, userData.user)
           console.log('✅ [getProfile] Profil créé:', !!newProfile)
+          if (newProfile) saveProfileToStorage(newProfile)
           return newProfile
         }
       }
       return null
     }
 
+    if (data) saveProfileToStorage(data)
     console.log('✅ [getProfile] Profil récupéré avec succès')
     return data
   } catch (error) {
     console.error('❌ [getProfile] Erreur inattendue:', error)
+    const cached = getProfileFromStorage(userId)
+    if (cached) return cached
     return null
   }
 }
