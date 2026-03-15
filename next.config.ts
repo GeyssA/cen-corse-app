@@ -167,8 +167,10 @@ const nextConfig: NextConfig = {
   
   
   // Export statique pour Capacitor (fichiers dans out/)
-  // Pour Vercel, on utilise 'standalone', pour Capacitor on exporte en statique
-  output: process.env.CAPACITOR_BUILD === 'true' ? 'export' : 'standalone',
+  // Sur Vercel : ne pas mettre output (défaut). Sinon Capacitor = 'export', self-host = 'standalone'
+  ...(process.env.VERCEL
+    ? {}
+    : { output: process.env.CAPACITOR_BUILD === 'true' ? 'export' : 'standalone' }),
   // Si on est en mode Capacitor, on exporte en statique
   ...(process.env.CAPACITOR_BUILD === 'true' && {
     trailingSlash: true,
