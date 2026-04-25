@@ -1,6 +1,6 @@
 {
   "android": {
-    "latestVersionCode": 20,
+    "latestVersionCode": 21,
     "forceUpdate": true,
     "title": "Nouvelle version disponible",
     "message": "Une mise a jour est requise pour continuer a utiliser l'application.",
