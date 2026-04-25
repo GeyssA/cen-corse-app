@@ -1,0 +1,9 @@
+{
+  "android": {
+    "latestVersionCode": 20,
+    "forceUpdate": true,
+    "title": "Nouvelle version disponible",
+    "message": "Une mise a jour est requise pour continuer a utiliser l'application.",
+    "playStoreUrl": "https://play.google.com/store/apps/details?id=com.cencorse.app"
+  }
+}

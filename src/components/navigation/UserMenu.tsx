@@ -17,19 +17,6 @@ export default function UserMenu() {
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 })
   const buttonRef = useRef<HTMLButtonElement>(null)
 
-  // Debug de l'état utilisateur
-  useEffect(() => {
-    console.log('🔍 [UserMenu] État utilisateur:', {
-      hasUser: !!user,
-      hasProfile: !!profile,
-      userEmail: user?.email,
-      profileName: profile?.full_name,
-      userId: user?.id,
-      userObject: user,
-      profileObject: profile
-    })
-  }, [user, profile])
-
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
@@ -146,7 +133,7 @@ export default function UserMenu() {
             </div>
           </div>
         </div>
-        <div className="p-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2">
+        <div className="p-2 pb-2 space-y-2">
           {/* Toggle Jour/Nuit */}
           <div className="pl-2 pr-4 py-3 flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -276,6 +263,22 @@ export default function UserMenu() {
             </div>
             <span className={`font-medium ${theme === 'light' ? 'text-gray-900' : 'text-white'}`}>Se déconnecter</span>
           </button>
+          <Link
+            href="/suppression-compte"
+            onClick={() => setIsOpen(false)}
+            className={`w-full text-left pl-2 pr-4 py-3 text-sm rounded-lg transition-all duration-200 flex items-center space-x-3 group ${
+              theme === 'light'
+                ? 'text-red-700 hover:bg-red-50'
+                : 'text-red-300 hover:bg-red-500/10'
+            }`}
+          >
+            <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center group-hover:bg-red-200 transition-colors">
+              <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-7 0h8" />
+              </svg>
+            </div>
+            <span className="font-medium">Supprimer mon compte</span>
+          </Link>
         </div>
       </div>,
       document.body
