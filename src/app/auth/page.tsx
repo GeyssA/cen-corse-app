@@ -5,6 +5,8 @@ import LoginForm from '@/components/auth/LoginForm'
 import SignUpForm from '@/components/auth/SignUpForm'
 import ForgotPasswordForm from '@/components/auth/ForgotPasswordForm'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
+import AuthLoading from '@/components/auth/AuthLoading'
 
 function AuthPageContent() {
   const [authMode, setAuthMode] = useState<'login' | 'signup' | 'forgot-password'>('login')
@@ -12,6 +14,15 @@ function AuthPageContent() {
   const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { user, loading: authLoading } = useAuth()
+
+  /** Déjà connecté (ex. retour OAuth, ou app rouverte avec session stockée) → accueil sans rester bloqué sur /auth */
+  useEffect(() => {
+    if (authLoading) return
+    if (user) {
+      router.replace('/')
+    }
+  }, [user, authLoading, router])
 
   useEffect(() => {
     const type = searchParams.get('type')
@@ -154,6 +165,16 @@ function AuthPageContent() {
     document.body.classList.toggle('auth-needs-scroll', needsScroll)
     return () => document.body.classList.remove('auth-needs-scroll')
   }, [authMode])
+
+  /** Évite d’afficher le formulaire de login si la session est déjà là (sync au retour sur l’app). */
+  if (authLoading || user) {
+    return (
+      <AuthLoading
+        message={user ? 'Ouverture de l’app…' : 'Chargement...'}
+        showProgress={false}
+      />
+    )
+  }
 
   // Gérer le mute/unmute
   const toggleMute = () => {
@@ -309,11 +330,11 @@ function AuthPageContent() {
               <img src="/Logo_CENCorse-removebg-preview.png" alt="Logo CEN Corse" className="w-40 h-auto object-contain" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-cyan-300 via-blue-300 to-purple-300 bg-clip-text text-transparent">
-            Le journal du CEN Corse
+          <h1 className="text-2xl sm:text-[1.6rem] font-bold mb-1.5 max-w-[17rem] sm:max-w-md mx-auto leading-tight bg-gradient-to-r from-cyan-300 via-blue-300 to-purple-300 bg-clip-text text-transparent">
+            L&apos;app du CEN Corse
           </h1>
-          <h2 className="text-lg text-gray-300 mb-0">
-            Suivez les projets et rejoignez la communauté
+          <h2 className="text-base sm:text-[0.95rem] text-gray-300 mb-0 max-w-sm mx-auto leading-snug px-1">
+            Collecte de données &amp; accès aux ressources
           </h2>
         </div>
 

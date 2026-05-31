@@ -195,7 +195,7 @@ export default function PresentationClient({ id }: PresentationClientProps) {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
               <Link
-                href="/apropos?tab=equipe"
+                href="/apropos"
                 className={`flex items-center space-x-2 px-4 py-2 rounded-full transition-all duration-300 hover:scale-105 ${
                   theme === 'light'
                     ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -358,14 +358,14 @@ export default function PresentationClient({ id }: PresentationClientProps) {
 
             <div className="flex justify-center pt-6">
               <Link
-                href={`/projets?employe=${encodeURIComponent(employee.name.split(' ').pop() || employee.name)}`}
+                href="/apropos"
                 className="group relative inline-flex items-center space-x-3 bg-gradient-to-r from-blue-600/30 via-indigo-600/30 to-purple-600/30 hover:from-blue-600/50 hover:via-indigo-600/50 hover:to-purple-600/50 text-white px-8 py-4 rounded-2xl font-semibold transition-all duration-500 hover:scale-105 active:scale-95 backdrop-blur-md border border-white/20 hover:border-white/40 shadow-xl hover:shadow-2xl hover:shadow-blue-500/25"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 via-indigo-600/20 to-purple-600/20 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-500" />
                 <svg className="w-6 h-6 relative z-10 group-hover:rotate-12 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
-                <span className="relative z-10 text-lg">Découvrir mes projets</span>
+                <span className="relative z-10 text-lg">Découvrir le CEN Corse</span>
               </Link>
             </div>
           </div>

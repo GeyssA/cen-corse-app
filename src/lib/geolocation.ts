@@ -21,6 +21,16 @@ export function isCapacitorNative(): boolean {
 }
 
 /**
+ * true si la page WebView est chargée dans la coque Capacitor (bridge présent).
+ * Après OAuth Google, certains builds font retourner `isNativePlatform() === false` alors qu’on est
+ * toujours dans l’APK — utiliser `isCapacitorShell()` pour ne pas ouvrir Chrome / deep link.
+ */
+export function isCapacitorShell(): boolean {
+  if (typeof window === 'undefined') return false
+  return !!(window as unknown as { Capacitor?: unknown }).Capacitor
+}
+
+/**
  * Sur l'app (Capacitor) : demande la permission de localisation au système.
  * À appeler sur un clic utilisateur (ex. ouverture de la modale d'observation).
  * La réponse (Autoriser / Refuser) est conservée par Android/iOS pour les prochaines fois.

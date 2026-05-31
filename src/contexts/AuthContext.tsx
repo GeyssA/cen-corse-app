@@ -4,13 +4,28 @@ import React, { createContext, useContext, useEffect, useState, useRef } from 'r
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { getProfile, saveProfileToStorage, Profile, AuthState } from '@/lib/auth'
+import { getOAuthRedirectUrl } from '@/lib/auth-callback-url'
+import { isCapacitorShell } from '@/lib/geolocation'
 
 // Cache simple pour les profils utilisateur (persiste tant que la session est active)
 const profileCache = new Map<string, { profile: Profile; timestamp: number }>()
 const PROFILE_CACHE_TTL = Infinity // Pas d'expiration - le cache reste jusqu'à déconnexion
 
+/** Profil minimal si l’API ne renvoie rien (réseau, 1ère install) : indispensable pour l’onboarding + modale nom. */
+function defaultProfileForUserId(userId: string): Profile {
+  return {
+    id: userId,
+    email: 'user@example.com',
+    full_name: 'Utilisateur',
+    role: 'visitor' as const,
+    avatar_url: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
+}
+
 // Fonction optimisée pour récupérer le profil avec cache et timeout PWA
-const getCachedProfile = async (userId: string): Promise<Profile | null> => {
+const getCachedProfile = async (userId: string): Promise<Profile> => {
   const cached = profileCache.get(userId)
   const now = Date.now()
   
@@ -31,27 +46,26 @@ const getCachedProfile = async (userId: string): Promise<Profile | null> => {
     if (profile) {
       profileCache.set(userId, { profile, timestamp: now })
       saveProfileToStorage(profile)
+      return profile
     }
-    
-    return profile
+
+    // getProfile a résolu null (ex. pas de cache hors ligne) : ne jamais laisser profile == null
+    // sinon pas de modale « Prénom / Nom », pas d’onboarding, pas de choix de thème
+    const fallback = defaultProfileForUserId(userId)
+    profileCache.set(userId, { profile: fallback, timestamp: now })
+    return fallback
   } catch (error) {
     console.warn('⚠️ Timeout ou erreur récupération profil:', error)
-    // Retourner un profil par défaut pour éviter le blocage
-    return {
-      id: userId,
-      email: 'user@example.com',
-      full_name: 'Utilisateur',
-      role: 'visitor' as const,
-      avatar_url: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }
+    const fallback = defaultProfileForUserId(userId)
+    profileCache.set(userId, { profile: fallback, timestamp: now })
+    return fallback
   }
 }
 
 interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<{ error: unknown }>
   signInWithGoogle: () => Promise<{ error: unknown }>
+  signInWithApple: () => Promise<{ error: unknown }>
   signUp: (email: string, password: string, fullName: string, accountType: 'employee' | 'external' | 'visitor') => Promise<{ error: unknown }>
   signOut: () => Promise<void>
   updateUserProfile: (updates: Partial<Profile>) => Promise<void>
@@ -99,14 +113,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Session valide - charger le profil avec cache
         setUser(session.user)
         
-        // Essayer de charger le profil, mais ne pas bloquer si ça échoue
         try {
           const userProfile = await getCachedProfile(session.user.id)
           setProfile(userProfile)
         } catch (error) {
-          console.warn('⚠️ Erreur chargement profil, continuation sans profil:', error)
-          // Continuer sans profil pour éviter le blocage
-          setProfile(null)
+          console.warn('⚠️ Erreur chargement profil, repli sur profil minimal (onboarding / nom).', error)
+          setProfile(defaultProfileForUserId(session.user.id))
         }
         
         setLoading(false)
@@ -173,36 +185,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Démarrer l'initialisation
     getInitialSession()
 
-    // Détecter la réouverture de l'appli (quand l'utilisateur revient après avoir fermé l'appli)
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
-        console.log('👁️ Application visible - Vérification de la session...')
-        try {
-          const { data: { session }, error } = await supabase.auth.getSession()
-          
-          if (session && !error && session.user) {
-            console.log('✅ Session toujours valide')
-            // Recharger le profil depuis le cache ou la BDD
-            const userProfile = await getCachedProfile(session.user.id)
-            if (userProfile && userProfile.role !== 'visitor') {
-              setProfile(userProfile)
-            }
-          } else {
-            console.warn('⚠️ Session invalide à la réouverture')
-          }
-        } catch (error) {
-          console.error('❌ Erreur lors de la vérification de session:', error)
+    /**
+     * Au retour sur l’app (onglet / appli au premier plan) : réaligner React avec le stockage Supabase.
+     * Avant : on ne mettait pas à jour `user` → écran /auth alors que la session existait encore.
+     */
+    const syncSessionOnResume = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+
+        if (session?.user && !error) {
+          setUser(session.user)
+          const userProfile = await getCachedProfile(session.user.id)
+          setProfile(userProfile)
+          startSessionRefresh()
+          setLoading(false)
         }
+      } catch (error) {
+        console.error('❌ Erreur lors de la synchronisation de session au retour:', error)
       }
     }
 
-    // Écouter les changements de visibilité de la page
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        await syncSessionOnResume()
+      }
+    }
+
     document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    /** Android/iOS : `visibilitychange` ne suffit pas toujours dans la WebView Capacitor. */
+    let removeAppState: (() => void) | undefined
+    void (async () => {
+      if (!isCapacitorShell()) return
+      try {
+        const { App } = await import('@capacitor/app')
+        const sub = await App.addListener('appStateChange', ({ isActive }) => {
+          if (isActive) void syncSessionOnResume()
+        })
+        removeAppState = () => {
+          void sub.remove()
+        }
+      } catch {
+        /* plugin absent */
+      }
+    })()
 
     return () => {
       subscription.unsubscribe()
       clearTimeout(safetyTimeout)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      removeAppState?.()
       if (sessionRefreshInterval.current) {
         clearInterval(sessionRefreshInterval.current)
       }
@@ -234,24 +266,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const signInWithGoogle = async () => {
+  const signInWithOAuthProvider = async (provider: 'google' | 'apple') => {
     try {
-      const redirectTo = typeof window !== 'undefined'
-        ? `${window.location.origin}/auth/callback`
-        : '/auth/callback'
+      const redirectTo = getOAuthRedirectUrl()
+      const useCustomTab = typeof window !== 'undefined' && isCapacitorShell()
+
       const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo },
+        provider,
+        options: {
+          redirectTo,
+          // Obligatoire si on ouvre l’URL nous-mêmes (natif Capacitor + Browser externe).
+          skipBrowserRedirect: useCustomTab,
+        },
       })
       if (error) return { error }
       if (data?.url && typeof window !== 'undefined') {
-        window.location.href = data.url
+        if (useCustomTab) {
+          const { Browser } = await import('@capacitor/browser')
+          await Browser.open({ url: data.url })
+        } else {
+          window.location.href = data.url
+        }
       }
       return { data, error: null }
     } catch (err) {
       return { error: err }
     }
   }
+
+  const signInWithGoogle = async () => signInWithOAuthProvider('google')
+  const signInWithApple = async () => signInWithOAuthProvider('apple')
 
   const signUp = async (email: string, password: string, fullName: string, accountType: 'employee' | 'external' | 'visitor') => {
     const redirectUrl = typeof window !== 'undefined' 
@@ -302,7 +346,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const onboardingKeys: { [key: string]: string } = {}
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i)
-          if (key && key.startsWith('hasSeenOnboarding_')) {
+          if (
+            key &&
+            (key.startsWith('hasSeenOnboarding_') || key.startsWith('cen_welcome_'))
+          ) {
             const value = localStorage.getItem(key)
             if (value) {
               onboardingKeys[key] = value
@@ -370,7 +417,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const onboardingKeys: { [key: string]: string } = {}
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i)
-          if (key && key.startsWith('hasSeenOnboarding_')) {
+          if (
+            key &&
+            (key.startsWith('hasSeenOnboarding_') || key.startsWith('cen_welcome_'))
+          ) {
             const value = localStorage.getItem(key)
             if (value) {
               onboardingKeys[key] = value
@@ -435,6 +485,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     signIn,
     signInWithGoogle,
+    signInWithApple,
     signUp,
     signOut,
     updateUserProfile,

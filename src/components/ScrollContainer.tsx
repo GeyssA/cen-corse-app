@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import { useLayoutEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 
 const scrollContainerStyle = {
@@ -30,11 +31,20 @@ export default function ScrollContainer({ children }: { children: React.ReactNod
   const isHome = pathname === '/'
   const isAuth = pathname?.startsWith('/auth')
   const isValidation = pathname?.startsWith('/validation')
+  useLayoutEffect(() => {
+    if (typeof document === 'undefined') return
+    if (isAuth) {
+      document.body.setAttribute('data-auth-route', 'true')
+    } else {
+      document.body.removeAttribute('data-auth-route')
+    }
+  }, [isAuth])
+  const isOAuthAppBridge = pathname?.includes('/auth/callback/app')
   /** Pleine page sans bandeau : chargement initial (milan) ou synchro profil (3 points) */
   const isLoginLoadingScreen = isHome && (authLoading || (user && !profile))
   return (
     <div
-      className={`${isHome ? 'scroll-container has-footer' : 'scroll-container'} ${isAuth ? 'scroll-container-auth' : ''} ${isLoginLoadingScreen ? 'scroll-container-loading' : ''} ${isValidation ? 'scroll-container-fullpage' : ''}`}
+      className={`${isHome ? 'scroll-container has-footer' : 'scroll-container'} ${isAuth ? 'scroll-container-auth' : ''} ${isLoginLoadingScreen ? 'scroll-container-loading' : ''} ${isValidation ? 'scroll-container-fullpage' : ''} ${isOAuthAppBridge ? 'scroll-container-oauth-app' : ''}`}
       style={isAuth ? authContainerStyle : scrollContainerStyle}
     >
       {children}

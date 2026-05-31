@@ -23,56 +23,52 @@ export default function SubTabs({ tabs, activeTab, onTabChange }: SubTabsProps) 
   const tabWidthPx = `${tabWidth}px`
 
   return (
-    <div className={`w-full border-b ${
-      theme === 'light' 
-        ? 'border-gray-200 bg-white' 
-        : 'border-white/10 bg-gray-800/50'
-    }`}>
-      <div className="w-full flex justify-center">
-        <div className="flex rounded-t-2xl overflow-hidden" style={{ width: '411px', margin: '0 auto' }}>
+    <div
+      className={`sticky z-40 w-full border-b backdrop-blur-sm ${
+        theme === 'light'
+          ? 'border-slate-200/90 bg-white/90'
+          : 'border-white/10 bg-slate-900/50'
+      }`}
+      style={{ top: 0 }}
+    >
+      <div className="flex w-full justify-center">
+        <div className="flex overflow-hidden rounded-t-2xl" style={{ width: '411px', margin: '0 auto' }}>
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id
-            
+
             return (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => onTabChange(tab.id)}
-                className={`flex items-center justify-center space-x-2 py-2 text-sm font-medium transition-all duration-200 relative rounded-t-xl ${
+                className={`relative flex items-center justify-center space-x-2 rounded-t-xl py-2.5 text-sm font-medium transition-all duration-200 ${
                   isActive
                     ? theme === 'light'
-                      ? 'text-blue-600'
-                      : 'text-blue-400'
+                      ? 'text-teal-800'
+                      : 'text-teal-200'
                     : theme === 'light'
-                      ? 'text-gray-600 hover:text-blue-600'
-                      : 'text-gray-400 hover:text-blue-400'
+                      ? 'text-slate-600 hover:text-teal-700'
+                      : 'text-slate-400 hover:text-teal-200/90'
                 }`}
                 style={{ width: tabWidthPx }}
               >
-                {/* Arrière-plan pour l'onglet actif */}
                 {isActive && (
-                  <div className={`absolute inset-0 transition-all duration-200 ${
-                    theme === 'light' 
-                      ? 'bg-blue-50/30' 
-                      : 'bg-white/3'
-                  }`} 
-                  style={{ width: '100%', height: '100%' }}
+                  <div
+                    className={`absolute inset-0 transition-all duration-200 ${
+                      theme === 'light' ? 'bg-teal-50/60' : 'bg-teal-500/12'
+                    }`}
+                    style={{ width: '100%', height: '100%' }}
                   />
                 )}
-                
-                {/* Barre inférieure très fine sur toute la largeur pour l'onglet actif */}
+
                 {isActive && (
-                  <div 
-                    className={`absolute bottom-0 transition-all duration-200 ${
-                      theme === 'light' 
-                        ? 'bg-blue-600 shadow-sm' 
-                        : 'bg-white shadow-glow'
-                    }`} 
-                    style={{ 
-                      height: '1px',
-                      width: '100%',
-                      left: '0',
-                      boxShadow: theme === 'light' ? '0 1px 3px rgba(37, 99, 235, 0.2)' : '0 1px 4px rgba(255, 255, 255, 0.3)' 
-                    }}
+                  <div
+                    className={`absolute bottom-0 h-[2px] w-full transition-all duration-200 ${
+                      theme === 'light'
+                        ? 'bg-teal-600 shadow-sm shadow-teal-600/25'
+                        : 'bg-teal-400/90'
+                    }`}
+                    style={{ left: 0 }}
                   />
                 )}
                 {tab.icon && (

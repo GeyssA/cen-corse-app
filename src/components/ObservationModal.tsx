@@ -1,18 +1,40 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
-import { createObservation } from '@/lib/observations'
+import {
+  createObservation,
+  updateObservation,
+  getObservationsByUser,
+  type Observation as ObservationRow
+} from '@/lib/observations'
 import { isOnline, addPendingObservation } from '@/lib/offlineQueue'
 import { uploadPhoto } from '@/lib/uploadPhoto'
-import { serializePhotoUrls, MAX_PHOTOS } from '@/lib/photoUrls'
+import { parsePhotoUrls, serializePhotoUrls, MAX_PHOTOS } from '@/lib/photoUrls'
+import { getMaxPhotoFileLabelFr, validatePhotoFileForUpload, validatePhotoFileListForUpload } from '@/lib/photoUploadLimits'
 import { getSitesByUserAndProtocole, getSitesByUser, type ObservationSite } from '@/lib/sites'
-import { getObservationsByUser } from '@/lib/observations'
 import { getCurrentPositionAsync, isCapacitorNative, type GeoError } from '@/lib/geolocation'
 import { invalidateMapDataCache } from '@/lib/mapDataCache'
+import {
+  choiceCheckIcon,
+  choiceChipSelected,
+  choiceChipUnselected,
+  choiceListRowIdle,
+  choiceListRowSelected
+} from '@/lib/choiceSelection'
 import MapPickModal from '@/components/MapPickModal'
 import { FALLBACK_BIRDS_FULL_NAMES } from '@/lib/voiceObservationParser'
+import {
+  buildGuidedObservationStepIds,
+  getGuidedObservationStepLabel,
+  isGuidedObservationSkippableStep
+} from '@/components/fieldFlow/buildGuidedObservationSteps'
+import ObservationModalGuidedBody from '@/components/ObservationModalGuidedBody'
+import type { ObservationForm } from '@/types/observationForm'
+import SimpleDateInput from '@/components/ui/SimpleDateInput'
+
+export type { ObservationForm }
 
 const PROTOCOLE_OPTIONS = [
   { value: 'Données opportunistes', label: 'Données opportunistes' },
@@ -75,20 +97,6 @@ const REPTILES_CORSE: string[] = [
   'Cistude d\'Europe - Emys orbicularis (Linnaeus, 1758)'
 ]
 
-interface ObservationForm {
-  date: string
-  protocole: string
-  passage: string
-  site: string
-  presence: boolean
-  groupe: string
-  nom_espece: string
-  effectif: string
-  stade: string
-  sexe: string
-  remarques: string
-}
-
 type FormKey = keyof ObservationForm
 
 // Icône épingle (conserver la valeur pour la prochaine saisie)
@@ -113,6 +121,8 @@ interface ObservationModalProps {
   initialPosition?: { latitude: number; longitude: number } | null
   /** Transcription vocale à afficher au-dessus de Contexte (petit, italique). */
   voiceTranscript?: string
+  /** Édition depuis la carte ou ailleurs : même modal, envoi en mise à jour. */
+  observationToEdit?: ObservationRow | null
 }
 
 function getTodayISO(): string {
@@ -120,7 +130,16 @@ function getTodayISO(): string {
   return d.toISOString().slice(0, 10)
 }
 
-export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefreshKey, initialForm, initialPosition, voiceTranscript }: ObservationModalProps) {
+export default function ObservationModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  sitesRefreshKey,
+  initialForm,
+  initialPosition,
+  voiceTranscript,
+  observationToEdit = null
+}: ObservationModalProps) {
   const { theme } = useTheme()
   const { user, profile } = useAuth()
   const [form, setForm] = useState<ObservationForm>({
@@ -176,9 +195,24 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
   const [showPresenceInfo, setShowPresenceInfo] = useState(false)
   const [existingMapPoints, setExistingMapPoints] = useState<import('./MapPickContent').ExistingMapPoint[]>([])
   const [existingPointsLoaded, setExistingPointsLoaded] = useState(false)
-  const [photoItems, setPhotoItems] = useState<Array<{ file: File; preview: string }>>([])
+  const [photoItems, setPhotoItems] = useState<Array<{ file: File; preview: string; loadFailed?: boolean }>>([])
+  const [photoFileError, setPhotoFileError] = useState<string | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const photoCameraRef = useRef<HTMLInputElement>(null)
+
+  const addPhotoFile = useCallback((f: File) => {
+    const err = validatePhotoFileForUpload(f)
+    if (err) {
+      setPhotoFileError(err)
+      return
+    }
+    setPhotoFileError(null)
+    setPhotoItems((prev) => {
+      if (prev.length >= MAX_PHOTOS) return prev
+      return [...prev, { file: f, preview: URL.createObjectURL(f) }]
+    })
+  }, [])
+  const [showSlowSubmitHint, setShowSlowSubmitHint] = useState(false)
 
   const isLight = theme === 'light'
   const togglePin = (field: FormKey) => setPinned((p) => ({ ...p, [field]: !p[field] }))
@@ -218,6 +252,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
     setSpeciesQuery('')
     setSiteQuery('')
     setSubmitError(null)
+    setPhotoFileError(null)
     setPhotoItems((prev) => {
       prev.forEach((p) => URL.revokeObjectURL(p.preview))
       return []
@@ -232,6 +267,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
   // Appliquer le pré-remplissage (saisie vocale) à l'ouverture
   useEffect(() => {
     if (!isOpen) return
+    if (observationToEdit?.id) return
     if (initialForm && Object.keys(initialForm).length > 0) {
       const keys = new Set<string>()
       ;(Object.keys(initialForm) as (keyof ObservationForm)[]).forEach((k) => {
@@ -261,7 +297,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
       setLatitude(initialPosition.latitude)
       setLongitude(initialPosition.longitude)
     }
-  }, [isOpen, initialForm, initialPosition])
+  }, [isOpen, initialForm, initialPosition, observationToEdit?.id])
 
   // Fermer la liste Protocole au clic extérieur
   useEffect(() => {
@@ -380,6 +416,45 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
     }
   }, [form.protocole, groupeForcedByProtocole])
 
+  const isEditingObs = Boolean(observationToEdit?.id)
+  const hasVoiceInit = Boolean(initialForm && Object.keys(initialForm).length > 0)
+  const [formUiMode, setFormUiMode] = useState<'guided' | 'full'>(() => {
+    if (typeof window === 'undefined') return 'guided'
+    const v = localStorage.getItem('cc_obs_form_mode')
+    return v === 'full' || v === 'guided' ? v : 'guided'
+  })
+  const [guidedStep, setGuidedStep] = useState(0)
+
+  const useGuided = !isEditingObs && !hasVoiceInit && formUiMode === 'guided'
+
+  const guidedStepIds = useMemo(
+    () => buildGuidedObservationStepIds(isHorsProtocole, Boolean(groupeForcedByProtocole)),
+    [isHorsProtocole, groupeForcedByProtocole]
+  )
+  const guidedMax = Math.max(0, guidedStepIds.length - 1)
+  const guidedStepClamped = Math.min(Math.max(0, guidedStep), guidedMax)
+  const guidedStepId = guidedStepIds[guidedStepClamped] ?? 'date'
+  const guidedProgressLabel = getGuidedObservationStepLabel(guidedStepId)
+  const guidedTotal = guidedStepIds.length
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('cc_obs_form_mode', formUiMode)
+  }, [formUiMode])
+
+  useEffect(() => {
+    if (!isOpen) return
+    setGuidedStep(0)
+  }, [isOpen])
+
+  useEffect(() => {
+    if (isOpen && hasVoiceInit) setFormUiMode('full')
+  }, [isOpen, hasVoiceInit])
+
+  useEffect(() => {
+    setGuidedStep((i) => (i > guidedMax ? Math.max(0, guidedMax) : i))
+  }, [guidedMax, guidedStepIds.length])
+
   // Charger sites + observations pour afficher sur la carte (choix de position)
   useEffect(() => {
     if (!isOpen || !user?.id) {
@@ -439,10 +514,42 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
       })
   }, [isOpen, user?.id])
 
-  // Réinitialiser le formulaire à l'ouverture. En app (Capacitor) : récup auto de la position (après 1ère autorisation).
-  // En run dev (navigateur) : pas d'auto pour éviter le refus silencieux — l'utilisateur clique sur le bouton.
+  // Réinitialiser le formulaire à l'ouverture, ou charger une observation à modifier.
+  // En app (Capacitor) : récup auto de la position pour une nouvelle saisie uniquement.
   useEffect(() => {
     if (!isOpen) return
+    if (observationToEdit?.id) {
+      const o = observationToEdit
+      setForm({
+        date: (o.date || '').slice(0, 10) || getTodayISO(),
+        protocole: o.protocole || 'Données opportunistes',
+        passage: o.passage || '',
+        site: o.site || '',
+        presence: o.presence !== false,
+        groupe: o.groupe || '',
+        nom_espece: o.nom_espece || '',
+        effectif: o.effectif ?? '',
+        stade: o.stade || '',
+        sexe: o.sexe || '',
+        remarques: o.remarques || ''
+      })
+      setLatitude(o.latitude ?? null)
+      setLongitude(o.longitude ?? null)
+      setSiteCustomMode(false)
+      setProtocoleCustomMode(!PROTOCOLE_OPTIONS.some((x) => x.value === o.protocole) && !!o.protocole)
+      setGroupeCustomMode(!GROUPE_OPTIONS.some((x) => x.value === o.groupe) && !!o.groupe)
+      setStadeCustomMode(!STADE_OPTIONS.some((x) => x.value === o.stade) && !!o.stade)
+      setSexeCustomMode(!SEXE_OPTIONS.some((x) => x.value === o.sexe) && !!o.sexe)
+      setSubmitError(null)
+      setGeoError(null)
+      setPhotoFileError(null)
+      setPhotoItems((prev) => {
+        prev.forEach((p) => URL.revokeObjectURL(p.preview))
+        return []
+      })
+      setGeoLoading(false)
+      return
+    }
     setForm((f) => ({ ...f, date: getTodayISO() }))
     setSiteCustomMode(false)
     setProtocoleCustomMode(false)
@@ -451,6 +558,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
     setSexeCustomMode(false)
     setSubmitError(null)
     setGeoError(null)
+    setPhotoFileError(null)
     if (!isCapacitorNative()) {
       setLatitude(null)
       setLongitude(null)
@@ -469,7 +577,19 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
         setGeoError(err.message ?? 'Position introuvable.')
       })
       .finally(() => setGeoLoading(false))
-  }, [isOpen])
+  }, [isOpen, observationToEdit?.id])
+
+  useEffect(() => {
+    if (!submitLoading) {
+      setShowSlowSubmitHint(false)
+      return
+    }
+    const t = window.setTimeout(() => setShowSlowSubmitHint(true), 5000)
+    return () => {
+      window.clearTimeout(t)
+      setShowSlowSubmitHint(false)
+    }
+  }, [submitLoading])
 
   const getPosition = () => {
     setGeoLoading(true)
@@ -512,7 +632,13 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
       }
     }
     setSubmitLoading(true)
+    const editingId = observationToEdit?.id
     try {
+      if (editingId && !isOnline()) {
+        setSubmitError('La modification nécessite une connexion réseau.')
+        setSubmitLoading(false)
+        return
+      }
       const payload = {
         ...form,
         latitude,
@@ -522,7 +648,13 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
         photo_url: undefined as string | undefined
       }
 
-      if (!isOnline()) {
+      if (!editingId && !isOnline()) {
+        const listErr = validatePhotoFileListForUpload(photoItems.map((i) => i.file))
+        if (listErr) {
+          setSubmitError(listErr)
+          setSubmitLoading(false)
+          return
+        }
         await addPendingObservation(payload, photoItems.map((i) => i.file))
         const defaultForm: ObservationForm = {
           date: getTodayISO(),
@@ -568,26 +700,70 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
       }
 
       const photoUrls: string[] = []
+      if (editingId) {
+        photoUrls.push(...parsePhotoUrls(observationToEdit!.photo_url))
+      }
       if (photoItems.length > 0 && user) {
         for (const item of photoItems) {
-          const url = await uploadPhoto(item.file, 'observation', user.id)
-          if (!url) {
-            // Échec upload photo : on enregistre en local, les photos seront envoyées au sync
-            await addPendingObservation(payload, photoItems.map((i) => i.file))
-            setSuccessFadeOut(false)
-            setShowSuccessCheck(true)
-            setSuccessMessage('Enregistré localement. Envoi automatique dès que vous serez en ligne.')
-            setTimeout(() => setSuccessFadeOut(true), 2500)
-            setTimeout(() => { setShowSuccessCheck(false); setSuccessMessage(undefined) }, 3000)
-            setPhotoItems((prev) => { prev.forEach((p) => URL.revokeObjectURL(p.preview)); return [] })
-            onSuccess?.()
+          const r = await uploadPhoto(item.file, 'observation', user.id)
+          if (!r.ok) {
+            if (editingId) {
+              setSubmitError(r.message)
+              setSubmitLoading(false)
+              return
+            }
+            if (r.canQueueOffline) {
+              await addPendingObservation(payload, photoItems.map((i) => i.file))
+              setSuccessFadeOut(false)
+              setShowSuccessCheck(true)
+              setSuccessMessage('Enregistré localement. Envoi automatique dès que vous serez en ligne.')
+              setTimeout(() => setSuccessFadeOut(true), 2500)
+              setTimeout(() => { setShowSuccessCheck(false); setSuccessMessage(undefined) }, 3000)
+              setPhotoItems((prev) => { prev.forEach((p) => URL.revokeObjectURL(p.preview)); return [] })
+              onSuccess?.()
+              setSubmitLoading(false)
+              return
+            }
+            setSubmitError(r.message)
             setSubmitLoading(false)
             return
           }
-          photoUrls.push(url)
+          photoUrls.push(r.publicUrl)
         }
       }
       const photo_url = serializePhotoUrls(photoUrls) ?? undefined
+      if (editingId) {
+        const { error: updErr } = await updateObservation(editingId, {
+          ...form,
+          latitude,
+          longitude,
+          observateur: profile?.full_name ?? '',
+          user_id: user.id,
+          photo_url: photo_url ?? null
+        })
+        if (updErr) {
+          setSubmitError(updErr)
+        } else {
+          setSuccessFadeOut(false)
+          setShowSuccessCheck(true)
+          setSuccessMessage('Donnée modifiée')
+          setTimeout(() => setSuccessFadeOut(true), 1100)
+          setTimeout(() => {
+            setShowSuccessCheck(false)
+            setSuccessMessage(undefined)
+            onClose()
+          }, 1600)
+          setPhotoItems((prev) => {
+            prev.forEach((p) => URL.revokeObjectURL(p.preview))
+            return []
+          })
+          invalidateMapDataCache()
+          onSuccess?.()
+        }
+        setSubmitLoading(false)
+        return
+      }
+
       const result = await createObservation({
         ...form,
         latitude,
@@ -636,6 +812,10 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
         // Ne pas fermer : l'utilisateur peut enchaîner une autre donnée sur le même point
       } else {
         // Échec Supabase (réseau, config, etc.) : enregistrement en local, sync au retour du réseau
+        const listErr = validatePhotoFileListForUpload(photoItems.map((i) => i.file))
+        if (listErr) {
+          setSubmitError(listErr)
+        } else {
         await addPendingObservation(payload, photoItems.map((i) => i.file))
         const defaultForm: ObservationForm = {
           date: getTodayISO(),
@@ -670,33 +850,43 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
         setTimeout(() => { setShowSuccessCheck(false); setSuccessMessage(undefined) }, 3000)
         setPhotoItems((prev) => { prev.forEach((p) => URL.revokeObjectURL(p.preview)); return [] })
         onSuccess?.()
+        }
       }
     } catch (e) {
-      // Erreur réseau ou inattendue : sauvegarde en local pour ne pas perdre la donnée
-      try {
-        const payload = {
-          ...form,
-          latitude: latitude ?? null,
-          longitude: longitude ?? null,
-          observateur: profile?.full_name ?? '',
-          user_id: user?.id,
-          photo_url: undefined as string | undefined
-        }
-        if (user && latitude != null && longitude != null) {
-          await addPendingObservation(payload, photoItems.map((i) => i.file))
-          setSubmitError(null)
-          setSuccessFadeOut(false)
-          setShowSuccessCheck(true)
-          setSuccessMessage('Enregistré localement. Envoi automatique dès que vous serez en ligne.')
-          setTimeout(() => setSuccessFadeOut(true), 2500)
-          setTimeout(() => { setShowSuccessCheck(false); setSuccessMessage(undefined) }, 3000)
-          setPhotoItems((prev) => { prev.forEach((p) => URL.revokeObjectURL(p.preview)); return [] })
-          onSuccess?.()
-        } else {
+      if (observationToEdit?.id) {
+        setSubmitError(e instanceof Error ? e.message : 'Erreur lors de la mise à jour.')
+      } else {
+        // Erreur réseau ou inattendue : sauvegarde en local pour ne pas perdre la donnée
+        try {
+          const payload = {
+            ...form,
+            latitude: latitude ?? null,
+            longitude: longitude ?? null,
+            observateur: profile?.full_name ?? '',
+            user_id: user?.id,
+            photo_url: undefined as string | undefined
+          }
+          if (user && latitude != null && longitude != null) {
+            const catchListErr = validatePhotoFileListForUpload(photoItems.map((i) => i.file))
+            if (catchListErr) {
+              setSubmitError(catchListErr)
+            } else {
+            await addPendingObservation(payload, photoItems.map((i) => i.file))
+            setSubmitError(null)
+            setSuccessFadeOut(false)
+            setShowSuccessCheck(true)
+            setSuccessMessage('Enregistré localement. Envoi automatique dès que vous serez en ligne.')
+            setTimeout(() => setSuccessFadeOut(true), 2500)
+            setTimeout(() => { setShowSuccessCheck(false); setSuccessMessage(undefined) }, 3000)
+            setPhotoItems((prev) => { prev.forEach((p) => URL.revokeObjectURL(p.preview)); return [] })
+            onSuccess?.()
+            }
+          } else {
+            setSubmitError('Erreur lors de l’enregistrement.')
+          }
+        } catch {
           setSubmitError('Erreur lors de l’enregistrement.')
         }
-      } catch {
-        setSubmitError('Erreur lors de l’enregistrement.')
       }
     } finally {
       setSubmitLoading(false)
@@ -705,13 +895,13 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
 
   if (!isOpen) return null
 
-  const inputClass = `w-full rounded-lg border px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500 transition-colors ${
+  const inputClass = `w-full min-h-12 rounded-xl border px-4 py-3.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500 transition-colors ${
     isLight
       ? 'bg-white border-gray-200 text-gray-800 placeholder-gray-400'
       : 'bg-gray-800/80 border-gray-600 text-gray-100 placeholder-gray-400'
   }`
-  const labelClass = `block text-sm font-medium ${isLight ? 'text-gray-700' : 'text-gray-300'}`
-  const labelRowClass = 'flex items-center justify-between gap-2 mb-1.5'
+  const labelClass = `block text-base font-medium ${isLight ? 'text-gray-700' : 'text-gray-300'}`
+  const labelRowClass = 'flex items-center justify-between gap-2 mb-2'
   const VOICE_FIELD_KEYS: FormKey[] = ['groupe', 'nom_espece', 'stade', 'sexe', 'effectif', 'remarques']
   const voiceFieldClass = (key: FormKey): string => {
     if (voicePrefilledKeys.has(key) && form[key]) {
@@ -721,8 +911,29 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
     }
     return ''
   }
-  const sectionTitleClass = `text-xs font-semibold uppercase tracking-wider ${isLight ? 'text-gray-500' : 'text-gray-400'}`
+  const sectionTitleClass = `text-sm font-semibold uppercase tracking-wider ${isLight ? 'text-gray-500' : 'text-gray-400'}`
   const pinButtonTitle = (field: FormKey) => (pinned[field] ? 'Ne plus conserver cette valeur' : 'Conserver pour la prochaine saisie')
+
+  const goNextGuided = () => {
+    if (guidedStepId === 'gps' && (latitude == null || longitude == null)) {
+      setSubmitError('Indiquez une position GPS (géolocalisation ou carte) avant de continuer ou d’enregistrer.')
+      return
+    }
+    setSubmitError(null)
+    if (guidedStepId === 'recap') return
+    setGuidedStep((i) => Math.min(i + 1, guidedMax))
+  }
+
+  const goPrevGuided = () => {
+    setSubmitError(null)
+    setGuidedStep((i) => Math.max(0, i - 1))
+  }
+
+  const passGuided = () => {
+    if (isGuidedObservationSkippableStep(guidedStepId)) {
+      goNextGuided()
+    }
+  }
 
   return (
     <>
@@ -740,9 +951,19 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
             isLight ? 'bg-white border-gray-200' : 'bg-gray-900 border-gray-700'
           }`}
         >
-        <header className={`sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6 py-4 border-b ${isLight ? 'border-gray-200 bg-white' : 'border-gray-700 bg-gray-900'}`}>
+        <header className={`sticky top-0 z-10 flex flex-col gap-0 border-b ${isLight ? 'border-gray-200 bg-white' : 'border-gray-700 bg-gray-900'}`}>
+          {showSlowSubmitHint && (
+            <div
+              className={`px-4 py-2 text-xs sm:text-sm border-b ${isLight ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-amber-950/80 text-amber-100 border-amber-800/60'}`}
+              role="status"
+            >
+              Enregistrement en cours… Si le réseau est lent ou les photos lourdes, cela peut prendre un peu plus de
+              temps. Ne fermez pas l’écran tant que le message de confirmation n’apparaît pas.
+            </div>
+          )}
+          <div className="flex items-center justify-between px-4 sm:px-6 py-4">
           <h2 id="observation-modal-title" className={`text-xl font-semibold tracking-tight ${isLight ? 'text-gray-900' : 'text-white'}`}>
-            Nouvelle observation naturaliste
+            {observationToEdit?.id ? 'Modifier l’observation' : 'Nouvelle observation naturaliste'}
           </h2>
           <button
             onClick={handleClose}
@@ -753,9 +974,140 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
+          </div>
         </header>
 
-        <div className="px-4 sm:px-6 py-5 pb-8 max-w-2xl mx-auto space-y-6">
+        {!isEditingObs && (
+          <div
+            className={`px-4 sm:px-6 py-2.5 border-b ${
+              isLight ? 'bg-gray-50/80 border-gray-200' : 'bg-gray-900/80 border-gray-700'
+            }`}
+          >
+            <div className="max-w-2xl mx-auto flex flex-wrap items-center justify-between gap-2">
+              <p
+                className={`text-xs font-medium uppercase tracking-wide ${
+                  isLight ? 'text-gray-500' : 'text-gray-400'
+                }`}
+              >
+                Mode de saisie
+              </p>
+              <div
+                className={`inline-flex rounded-xl p-0.5 ${isLight ? 'bg-gray-200/80' : 'bg-gray-800/80'}`}
+                role="group"
+                aria-label="Mode d’affichage du formulaire"
+              >
+                <button
+                  type="button"
+                  onClick={() => setFormUiMode('guided')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                    formUiMode === 'guided'
+                      ? isLight
+                        ? 'bg-white text-gray-900 shadow'
+                        : 'bg-gray-700 text-white'
+                      : isLight
+                        ? 'text-gray-500'
+                        : 'text-gray-400'
+                  }`}
+                >
+                  Pas à pas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormUiMode('full')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                    formUiMode === 'full'
+                      ? isLight
+                        ? 'bg-white text-gray-900 shadow'
+                        : 'bg-gray-700 text-white'
+                      : isLight
+                        ? 'text-gray-500'
+                        : 'text-gray-400'
+                  }`}
+                >
+                  Tout sur une page
+                </button>
+              </div>
+            </div>
+            {useGuided && (
+              <div className="max-w-2xl mx-auto mt-3 w-full">
+                <div
+                  className="h-1.5 w-full overflow-hidden rounded-full"
+                  style={{ background: isLight ? '#e5e7eb' : '#374151' }}
+                >
+                  <div
+                    className="h-full rounded-full bg-teal-500 transition-all duration-300"
+                    style={{ width: `${((guidedStepClamped + 1) / Math.max(1, guidedTotal)) * 100}%` }}
+                  />
+                </div>
+                <p className={`mt-2 text-sm ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
+                  Étape {guidedStepClamped + 1} / {guidedTotal} — {guidedProgressLabel}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {useGuided && (
+        <div className="px-4 sm:px-6 py-4 pb-8 max-w-2xl mx-auto w-full">
+          <ObservationModalGuidedBody
+            stepId={guidedStepId}
+            isLight={isLight}
+            inputClass={inputClass}
+            form={form}
+            setForm={setForm}
+            isHorsProtocole={isHorsProtocole}
+            groupeForcedByProtocole={groupeForcedByProtocole}
+            getSpeciesListForGroup={getSpeciesListForGroup}
+            speciesByGroup={speciesByGroup}
+            sites={sites}
+            pinned={pinned}
+            pinToggle={togglePin}
+            pinButtonTitle={pinButtonTitle}
+            PinIcon={PinIcon}
+            voiceFieldClass={voiceFieldClass}
+            onShowProtocoleInfo={() => setShowDonneesOpportunistesInfo(true)}
+            onShowPresenceInfo={() => setShowPresenceInfo(true)}
+            setProtocoleCustomMode={setProtocoleCustomMode}
+            protocoleCustomMode={protocoleCustomMode}
+            setGroupeCustomMode={setGroupeCustomMode}
+            groupeCustomMode={groupeCustomMode}
+            setStadeCustomMode={setStadeCustomMode}
+            stadeCustomMode={stadeCustomMode}
+            setSexeCustomMode={setSexeCustomMode}
+            sexeCustomMode={sexeCustomMode}
+            setSiteOpen={setSiteOpen}
+            siteOpen={siteOpen}
+            setSiteCustomMode={setSiteCustomMode}
+            siteCustomMode={siteCustomMode}
+            siteQuery={siteQuery}
+            setSiteQuery={setSiteQuery}
+            setEspeceOpen={setEspeceOpen}
+            especeOpen={especeOpen}
+            speciesQuery={speciesQuery}
+            setSpeciesQuery={setSpeciesQuery}
+            setProtocoleOpen={setProtocoleOpen}
+            siteRef={siteRef}
+            siteInputRef={siteInputRef}
+            especeRef={especeRef}
+            protocoleRef={protocoleRef}
+            photoItems={photoItems}
+            setPhotoItems={setPhotoItems}
+            onAddPhotoFile={addPhotoFile}
+            photoFileError={photoFileError}
+            maxPhotoFileLabel={getMaxPhotoFileLabelFr()}
+            photoInputRef={photoInputRef}
+            photoCameraRef={photoCameraRef}
+            latitude={latitude}
+            longitude={longitude}
+            geoError={geoError}
+            geoLoading={geoLoading}
+            getPosition={getPosition}
+            onOpenMap={() => setShowMapPicker(true)}
+          />
+        </div>
+        )}
+        {!useGuided && (
+        <div className="px-4 sm:px-6 py-5 pb-8 max-w-2xl mx-auto space-y-7">
           {voiceTranscript && (
             <div className={`rounded-xl border p-4 ${isLight ? 'bg-sky-50/80 border-sky-200' : 'bg-sky-900/20 border-sky-700/50'}`}>
               <p className={`text-xs font-semibold uppercase tracking-wide mb-1 ${isLight ? 'text-sky-700' : 'text-sky-300'}`}>
@@ -771,7 +1123,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
           )}
           <section>
             <h3 className={`${sectionTitleClass} mb-3`}>Contexte</h3>
-            <div className="space-y-4">
+            <div className="space-y-5">
             <div>
             <div className={labelRowClass}>
               <label className={labelClass}>Date</label>
@@ -779,24 +1131,12 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                 <PinIcon pinned={!!pinned.date} isLight={isLight} />
               </button>
             </div>
-            <div className="date-input-wrapper">
-              <div
-                className={`date-input-overlay ${isLight ? 'bg-white border-gray-200 text-gray-900' : 'bg-gray-800/80 border-gray-600 text-gray-100'}`}
-                aria-hidden
-              >
-                <span>{form.date ? new Date(form.date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</span>
-                <svg className="w-4 h-4 shrink-0 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <input
-                type="date"
-                value={form.date}
-                onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                className="cursor-pointer"
-                aria-label="Date"
-              />
-            </div>
+            <SimpleDateInput
+              value={form.date}
+              onChange={(nextIsoDate) => setForm((f) => ({ ...f, date: nextIsoDate }))}
+              isLight={isLight}
+              ariaLabel="Date de l'observation"
+            />
           </div>
 
           <div ref={protocoleRef} className="relative">
@@ -865,22 +1205,12 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                           setForm((f) => ({ ...f, protocole: opt.value, groupe: groupeForProtocole }))
                           setProtocoleOpen(false)
                         }}
-                        className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 ${
-                          opt.value === 'Données opportunistes'
-                            ? isLight
-                              ? 'bg-sky-50/90 hover:bg-sky-100/90 text-gray-800'
-                              : 'bg-sky-900/25 hover:bg-sky-900/40 text-gray-200'
-                            : form.protocole === opt.value
-                              ? isLight
-                                ? 'bg-teal-50 text-teal-800'
-                                : 'bg-teal-900/30 text-teal-200'
-                              : isLight
-                                ? 'hover:bg-gray-50 text-gray-800'
-                                : 'hover:bg-gray-700/80 text-gray-200'
+                        className={`w-full px-4 py-3.5 text-left text-base transition-colors flex items-center gap-2 ${
+                          form.protocole === opt.value ? choiceListRowSelected(isLight) : choiceListRowIdle(isLight)
                         }`}
                       >
                         {form.protocole === opt.value && (
-                          <svg className="w-4 h-4 shrink-0 text-teal-600" fill="currentColor" viewBox="0 0 20 20">
+                          <svg className={`w-4 h-4 shrink-0 ${choiceCheckIcon(isLight)}`} fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                           </svg>
                         )}
@@ -909,7 +1239,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                         setProtocoleOpen(false)
                         if (!form.protocole) setForm((f) => ({ ...f, protocole: '' }))
                       }}
-                      className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}
+                      className={`w-full px-4 py-3.5 text-left text-base transition-colors flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}
                     >
                       <span>Autre (saisie libre)…</span>
                     </button>
@@ -919,7 +1249,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                         setForm((f) => ({ ...f, protocole: '' }))
                         setProtocoleOpen(false)
                       }}
-                      className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 border-t ${
+                      className={`w-full px-4 py-3.5 text-left text-base transition-colors flex items-center gap-2 border-t ${
                         isLight
                           ? 'border-gray-100 text-gray-500 hover:bg-gray-50'
                           : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'
@@ -955,14 +1285,8 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                       key={num}
                       type="button"
                       onClick={() => setForm((f) => ({ ...f, passage: value }))}
-                      className={`min-w-[2.75rem] py-3 rounded-xl text-sm font-semibold transition-all ${
-                        selected
-                          ? isLight
-                            ? 'bg-teal-600 text-white shadow-md ring-2 ring-teal-400 ring-offset-2 ring-offset-white'
-                            : 'bg-teal-500 text-white shadow-md ring-2 ring-teal-400 ring-offset-2 ring-offset-gray-900'
-                          : isLight
-                            ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
-                            : 'bg-gray-700/80 text-gray-200 hover:bg-gray-600 border border-gray-600'
+                      className={`min-w-[2.75rem] py-3.5 rounded-xl text-base font-semibold transition-colors ${
+                        selected ? choiceChipSelected(isLight) : choiceChipUnselected(isLight)
                       }`}
                     >
                       {num}
@@ -1060,11 +1384,11 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                       return (
                         <>
                           {sites.length === 0 ? (
-                            <div className={`px-4 py-3 text-sm ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
+                            <div className={`px-4 py-3.5 text-base ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
                               Aucun site enregistré pour ce protocole. Utilisez « Saisie libre » ci-dessous pour en créer un.
                             </div>
                           ) : filtered.length === 0 ? (
-                            <div className={`px-4 py-3 text-sm ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
+                            <div className={`px-4 py-3.5 text-base ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
                               Aucun site ne contient « {siteQuery.trim()} ». Affinez ou utilisez « Saisie libre ».
                             </div>
                           ) : null}
@@ -1077,14 +1401,14 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                                 setSiteQuery('')
                                 setSiteOpen(false)
                               }}
-                              className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 ${
+                              className={`w-full px-4 py-3.5 text-left text-base transition-colors flex items-center gap-2 ${
                                 form.site === s.nom_du_site
-                                  ? isLight ? 'bg-teal-50 text-teal-800' : 'bg-teal-900/30 text-teal-200'
-                                  : isLight ? 'hover:bg-gray-50 text-gray-800' : 'hover:bg-gray-700/80 text-gray-200'
+                                  ? choiceListRowSelected(isLight)
+                                  : choiceListRowIdle(isLight)
                               }`}
                             >
                               {form.site === s.nom_du_site && (
-                                <svg className="w-4 h-4 shrink-0 text-teal-600" fill="currentColor" viewBox="0 0 20 20">
+                                <svg className={`w-4 h-4 shrink-0 ${choiceCheckIcon(isLight)}`} fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                 </svg>
                               )}
@@ -1099,7 +1423,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                               setForm((f) => ({ ...f, site: '' }))
                               setSiteQuery('')
                             }}
-                            className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}
+                            className={`w-full px-4 py-3.5 text-left text-base transition-colors flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}
                           >
                             <span>Saisie libre…</span>
                           </button>
@@ -1135,14 +1459,8 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
               <button
                 type="button"
                 onClick={() => setForm((f) => ({ ...f, presence: true }))}
-                className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-all ${
-                  form.presence
-                    ? isLight
-                      ? 'bg-emerald-500 text-white shadow-md ring-2 ring-emerald-400 ring-offset-2 ring-offset-white'
-                      : 'bg-emerald-500 text-white shadow-md ring-2 ring-emerald-400 ring-offset-2 ring-offset-gray-900'
-                    : isLight
-                      ? 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
-                      : 'bg-gray-700/80 text-gray-400 hover:bg-gray-600 border border-gray-600'
+                className={`flex-1 py-3.5 rounded-xl text-base font-semibold transition-colors ${
+                  form.presence ? choiceChipSelected(isLight) : choiceChipUnselected(isLight)
                 }`}
               >
                 Oui
@@ -1150,14 +1468,8 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
               <button
                 type="button"
                 onClick={() => setForm((f) => ({ ...f, presence: false }))}
-                className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-all ${
-                  !form.presence
-                    ? isLight
-                      ? 'bg-gray-600 text-white shadow-md ring-2 ring-gray-500 ring-offset-2 ring-offset-white'
-                      : 'bg-gray-600 text-white shadow-md ring-2 ring-gray-500 ring-offset-2 ring-offset-gray-900'
-                    : isLight
-                      ? 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
-                      : 'bg-gray-700/80 text-gray-400 hover:bg-gray-600 border border-gray-600'
+                className={`flex-1 py-3.5 rounded-xl text-base font-semibold transition-colors ${
+                  !form.presence ? choiceChipSelected(isLight) : choiceChipUnselected(isLight)
                 }`}
               >
                 Non
@@ -1236,18 +1548,14 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                           setForm((f) => ({ ...f, groupe: opt.value }))
                           setGroupeOpen(false)
                         }}
-                        className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 ${
+                        className={`w-full px-4 py-3.5 text-left text-base transition-colors flex items-center gap-2 ${
                           form.groupe === opt.value
-                            ? isLight
-                              ? 'bg-blue-50 text-blue-700'
-                              : 'bg-blue-900/30 text-blue-300'
-                            : isLight
-                              ? 'hover:bg-gray-50 text-gray-800'
-                              : 'hover:bg-gray-700/80 text-gray-200'
+                            ? choiceListRowSelected(isLight)
+                            : choiceListRowIdle(isLight)
                         }`}
                       >
                         {form.groupe === opt.value && (
-                          <svg className="w-4 h-4 shrink-0 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                          <svg className={`w-4 h-4 shrink-0 ${choiceCheckIcon(isLight)}`} fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                           </svg>
                         )}
@@ -1260,7 +1568,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                         setGroupeCustomMode(true)
                         setGroupeOpen(false)
                       }}
-                      className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}
+                      className={`w-full px-4 py-3.5 text-left text-base transition-colors flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}
                     >
                       <span>Autre (saisie libre)…</span>
                     </button>
@@ -1270,7 +1578,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                         setForm((f) => ({ ...f, groupe: '' }))
                         setGroupeOpen(false)
                       }}
-                      className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}
+                      className={`w-full px-4 py-3.5 text-left text-base transition-colors flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}
                     >
                       <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1369,11 +1677,11 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                         }`}
                       >
                         {isLoading ? (
-                          <div className={`px-4 py-3 text-sm ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
+                          <div className={`px-4 py-3.5 text-base ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
                             Chargement des espèces…
                           </div>
                         ) : filtered.length === 0 ? (
-                          <div className={`px-4 py-3 text-sm ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
+                          <div className={`px-4 py-3.5 text-base ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
                             {list.length === 0
                               ? 'Liste vide pour ce groupe. Saisissez le nom de l\'espèce ci-dessus (référentiel à compléter : voir scripts/rebuild-taxon-filtered.cjs).'
                               : q
@@ -1390,14 +1698,14 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                                 setSpeciesQuery('')
                                 setEspeceOpen(false)
                               }}
-                              className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 ${
+                              className={`w-full px-4 py-3.5 text-left text-base transition-colors flex items-center gap-2 ${
                                 form.nom_espece === name
-                                  ? isLight ? 'bg-teal-50 text-teal-800' : 'bg-teal-900/30 text-teal-200'
-                                  : isLight ? 'hover:bg-gray-50 text-gray-800' : 'hover:bg-gray-700/80 text-gray-200'
+                                  ? choiceListRowSelected(isLight)
+                                  : choiceListRowIdle(isLight)
                               }`}
                             >
                               {form.nom_espece === name && (
-                                <svg className="w-4 h-4 shrink-0 text-teal-600" fill="currentColor" viewBox="0 0 20 20">
+                                <svg className={`w-4 h-4 shrink-0 ${choiceCheckIcon(isLight)}`} fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                 </svg>
                               )}
@@ -1479,16 +1787,22 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                         key={opt.value}
                         type="button"
                         onClick={() => { setForm((f) => ({ ...f, stade: opt.value })); setStadeOpen(false) }}
-                        className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 ${form.stade === opt.value ? (isLight ? 'bg-teal-50 text-teal-800' : 'bg-teal-900/30 text-teal-200') : (isLight ? 'hover:bg-gray-50 text-gray-800' : 'hover:bg-gray-700/80 text-gray-200')}`}
+                        className={`w-full px-4 py-3.5 text-left text-base transition-colors flex items-center gap-2 ${
+                          form.stade === opt.value ? choiceListRowSelected(isLight) : choiceListRowIdle(isLight)
+                        }`}
                       >
-                        {form.stade === opt.value && <svg className="w-4 h-4 shrink-0 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                        {form.stade === opt.value && (
+                          <svg className={`w-4 h-4 shrink-0 ${choiceCheckIcon(isLight)}`} fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
                         <span>{opt.label}</span>
                       </button>
                     ))}
-                    <button type="button" onClick={() => { setStadeCustomMode(true); setStadeOpen(false) }} className={`w-full px-4 py-3 text-left text-sm flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}>
+                    <button type="button" onClick={() => { setStadeCustomMode(true); setStadeOpen(false) }} className={`w-full px-4 py-3.5 text-left text-base flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}>
                       <span>Autre (saisie libre)…</span>
                     </button>
-                    <button type="button" onClick={() => { setForm((f) => ({ ...f, stade: '' })); setStadeOpen(false) }} className={`w-full px-4 py-3 text-left text-sm flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}>
+                    <button type="button" onClick={() => { setForm((f) => ({ ...f, stade: '' })); setStadeOpen(false) }} className={`w-full px-4 py-3.5 text-left text-base flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}>
                       <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       <span>Supprimer la sélection</span>
                     </button>
@@ -1541,16 +1855,22 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                         key={opt.value}
                         type="button"
                         onClick={() => { setForm((f) => ({ ...f, sexe: opt.value })); setSexeOpen(false) }}
-                        className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-2 ${form.sexe === opt.value ? (isLight ? 'bg-teal-50 text-teal-800' : 'bg-teal-900/30 text-teal-200') : (isLight ? 'hover:bg-gray-50 text-gray-800' : 'hover:bg-gray-700/80 text-gray-200')}`}
+                        className={`w-full px-4 py-3.5 text-left text-base transition-colors flex items-center gap-2 ${
+                          form.sexe === opt.value ? choiceListRowSelected(isLight) : choiceListRowIdle(isLight)
+                        }`}
                       >
-                        {form.sexe === opt.value && <svg className="w-4 h-4 shrink-0 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                        {form.sexe === opt.value && (
+                          <svg className={`w-4 h-4 shrink-0 ${choiceCheckIcon(isLight)}`} fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
                         <span>{opt.label}</span>
                       </button>
                     ))}
-                    <button type="button" onClick={() => { setSexeCustomMode(true); setSexeOpen(false) }} className={`w-full px-4 py-3 text-left text-sm flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}>
+                    <button type="button" onClick={() => { setSexeCustomMode(true); setSexeOpen(false) }} className={`w-full px-4 py-3.5 text-left text-base flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}>
                       <span>Autre (saisie libre)…</span>
                     </button>
-                    <button type="button" onClick={() => { setForm((f) => ({ ...f, sexe: '' })); setSexeOpen(false) }} className={`w-full px-4 py-3 text-left text-sm flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}>
+                    <button type="button" onClick={() => { setForm((f) => ({ ...f, sexe: '' })); setSexeOpen(false) }} className={`w-full px-4 py-3.5 text-left text-base flex items-center gap-2 border-t ${isLight ? 'border-gray-100 text-gray-500 hover:bg-gray-50' : 'border-gray-700 text-gray-400 hover:bg-gray-700/80'}`}>
                       <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       <span>Supprimer la sélection</span>
                     </button>
@@ -1572,7 +1892,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
             <textarea
               value={form.remarques}
               onChange={(e) => setForm((f) => ({ ...f, remarques: e.target.value }))}
-              className={`${inputClass} min-h-[80px] resize-y`}
+              className={`${inputClass} min-h-[100px] resize-y`}
               placeholder="Remarques"
               rows={3}
             />
@@ -1581,7 +1901,17 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
 
           {/* Photos */}
           <section>
-            <h3 className={`${sectionTitleClass} mb-3`}>Photos <span className="font-normal normal-case">(max {MAX_PHOTOS})</span></h3>
+            <h3 className={`${sectionTitleClass} mb-1`}>
+              Photos <span className="font-normal normal-case">(max {MAX_PHOTOS} · {getMaxPhotoFileLabelFr()} chacune)</span>
+            </h3>
+            <p className={`text-xs mb-3 ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
+              Les images plus lourdes que {getMaxPhotoFileLabelFr()} sont refusées. Si l’aperçu reste gris, supprimez la photo et en choisissez une autre.
+            </p>
+            {photoFileError && (
+              <p className="mb-3 text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 rounded-xl px-3 py-2" role="alert">
+                {photoFileError}
+              </p>
+            )}
             <div>
             <input
               ref={photoInputRef}
@@ -1591,7 +1921,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
               onChange={(e) => {
                 const f = e.target.files?.[0]
                 if (f && photoItems.length < MAX_PHOTOS) {
-                  setPhotoItems((prev) => [...prev, { file: f, preview: URL.createObjectURL(f) }])
+                  addPhotoFile(f)
                 }
                 e.target.value = ''
               }}
@@ -1605,7 +1935,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
               onChange={(e) => {
                 const f = e.target.files?.[0]
                 if (f && photoItems.length < MAX_PHOTOS) {
-                  setPhotoItems((prev) => [...prev, { file: f, preview: URL.createObjectURL(f) }])
+                  addPhotoFile(f)
                 }
                 e.target.value = ''
               }}
@@ -1615,12 +1945,32 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                 <div className="grid grid-cols-3 gap-2">
                   {photoItems.map((item, index) => (
                     <div key={index} className="relative">
-                      <img src={item.preview} alt={`Aperçu ${index + 1}`} className="rounded-xl h-32 w-full object-cover border border-gray-200 dark:border-gray-600" />
+                      {item.loadFailed ? (
+                        <div
+                          className={`rounded-xl h-32 w-full border flex items-center justify-center p-2 text-center text-xs ${
+                            isLight ? 'bg-gray-100 border-gray-300 text-gray-600' : 'bg-gray-800/80 border-gray-600 text-gray-300'
+                          }`}
+                        >
+                          Aperçu indisponible (fichier lourd, HEIC / format, ou image corrompue). Supprimez et reprenez une image plus légère (max. {getMaxPhotoFileLabelFr()}) si besoin.
+                        </div>
+                      ) : (
+                        <img
+                          src={item.preview}
+                          alt={`Aperçu ${index + 1}`}
+                          className="rounded-xl h-32 w-full object-cover border border-gray-200 dark:border-gray-600"
+                          onError={() => {
+                            setPhotoItems((prev) =>
+                              prev.map((it, i) => (i === index ? { ...it, loadFailed: true } : it))
+                            )
+                          }}
+                        />
+                      )}
                       <button
                         type="button"
                         onClick={() => {
                           URL.revokeObjectURL(item.preview)
                           setPhotoItems((prev) => prev.filter((_, i) => i !== index))
+                          setPhotoFileError(null)
                         }}
                         className={`absolute top-1 right-1 p-1 rounded-full text-white ${isLight ? 'bg-red-500 hover:bg-red-600' : 'bg-red-600 hover:bg-red-500'}`}
                         aria-label={`Supprimer la photo ${index + 1}`}
@@ -1635,7 +1985,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                     <button
                       type="button"
                       onClick={() => photoInputRef.current?.click()}
-                      className={`flex-1 rounded-xl px-4 py-3 border border-dashed flex flex-col items-center justify-center gap-1.5 text-sm ${isLight ? 'border-gray-300 text-gray-500 hover:bg-gray-50' : 'border-gray-600 text-gray-400 hover:bg-gray-800/50'}`}
+                      className={`flex-1 rounded-xl px-4 py-3.5 min-h-[3.25rem] border border-dashed flex flex-col items-center justify-center gap-1.5 text-base ${isLight ? 'border-gray-300 text-gray-500 hover:bg-gray-50' : 'border-gray-600 text-gray-400 hover:bg-gray-800/50'}`}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -1645,7 +1995,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                     <button
                       type="button"
                       onClick={() => photoCameraRef.current?.click()}
-                      className={`flex-1 rounded-xl px-4 py-3 border border-dashed flex flex-col items-center justify-center gap-1.5 text-sm ${isLight ? 'border-gray-300 text-gray-500 hover:bg-gray-50' : 'border-gray-600 text-gray-400 hover:bg-gray-800/50'}`}
+                      className={`flex-1 rounded-xl px-4 py-3.5 min-h-[3.25rem] border border-dashed flex flex-col items-center justify-center gap-1.5 text-base ${isLight ? 'border-gray-300 text-gray-500 hover:bg-gray-50' : 'border-gray-600 text-gray-400 hover:bg-gray-800/50'}`}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -1662,7 +2012,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                 <button
                   type="button"
                   onClick={() => photoInputRef.current?.click()}
-                  className={`flex-1 rounded-xl px-4 py-3 border border-dashed flex flex-col items-center justify-center gap-1.5 text-sm ${isLight ? 'border-gray-300 text-gray-500 hover:bg-gray-50' : 'border-gray-600 text-gray-400 hover:bg-gray-800/50'}`}
+                  className={`flex-1 rounded-xl px-4 py-3.5 min-h-[3.25rem] border border-dashed flex flex-col items-center justify-center gap-1.5 text-base ${isLight ? 'border-gray-300 text-gray-500 hover:bg-gray-50' : 'border-gray-600 text-gray-400 hover:bg-gray-800/50'}`}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -1672,7 +2022,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                 <button
                   type="button"
                   onClick={() => photoCameraRef.current?.click()}
-                  className={`flex-1 rounded-xl px-4 py-3 border border-dashed flex flex-col items-center justify-center gap-1.5 text-sm ${isLight ? 'border-gray-300 text-gray-500 hover:bg-gray-50' : 'border-gray-600 text-gray-400 hover:bg-gray-800/50'}`}
+                  className={`flex-1 rounded-xl px-4 py-3.5 min-h-[3.25rem] border border-dashed flex flex-col items-center justify-center gap-1.5 text-base ${isLight ? 'border-gray-300 text-gray-500 hover:bg-gray-50' : 'border-gray-600 text-gray-400 hover:bg-gray-800/50'}`}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -1692,7 +2042,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
             <div className="flex flex-col gap-3">
               {(latitude != null && longitude != null) ? (
                 <>
-                  <div className={`rounded-lg px-3.5 py-2.5 border flex items-center gap-3 ${isLight ? 'bg-teal-50/80 border-teal-200' : 'bg-teal-900/20 border-teal-700/50'}`}>
+                  <div className={`rounded-xl px-3.5 py-3 border flex items-center gap-3 ${isLight ? 'bg-teal-50/80 border-teal-200' : 'bg-teal-900/20 border-teal-700/50'}`}>
                     <svg className="w-5 h-5 shrink-0 text-teal-600" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
@@ -1706,7 +2056,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                     type="button"
                     onClick={getPosition}
                     disabled={geoLoading}
-                    className={`rounded-xl px-4 py-2.5 text-sm font-medium flex items-center justify-center gap-2 ${isLight ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'} disabled:opacity-50`}
+                    className={`rounded-xl px-4 py-3 text-base font-medium flex items-center justify-center gap-2 min-h-12 ${isLight ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'} disabled:opacity-50`}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     {geoLoading ? 'Récupération…' : 'Actualiser la position'}
@@ -1714,7 +2064,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                   <button
                     type="button"
                     onClick={() => setShowMapPicker(true)}
-                    className={`rounded-lg px-3.5 py-2.5 text-sm font-medium flex items-center justify-center gap-2 ${isLight ? 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200' : 'bg-teal-900/30 text-teal-200 hover:bg-teal-800/50 border border-teal-600/50'}`}
+                    className={`rounded-xl px-3.5 py-3 text-base font-medium flex items-center justify-center gap-2 min-h-12 ${isLight ? 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200' : 'bg-teal-900/30 text-teal-200 hover:bg-teal-800/50 border border-teal-600/50'}`}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.45-2.72A1 1 0 013 16.382V5.618a1 1 0 011.55-.832L9 7m0 13l6-3m-6 3V7m6 10l4.55 2.27a1 1 0 001.45-.83V5.618a1 1 0 00-.55-.832L15 4m0 0V4m0 0L9 7" /></svg>
                     Choisir sur la carte
@@ -1727,7 +2077,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                     type="button"
                     onClick={getPosition}
                     disabled={geoLoading}
-                    className={`rounded-lg px-4 py-3 text-sm font-medium flex items-center justify-center gap-3 w-full ${isLight ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-teal-500 text-white hover:bg-teal-600'} disabled:opacity-70`}
+                    className={`rounded-xl px-4 py-3.5 text-base font-medium flex items-center justify-center gap-3 w-full min-h-12 ${isLight ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-teal-500 text-white hover:bg-teal-600'} disabled:opacity-70`}
                   >
                     <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -1741,7 +2091,7 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
                   <button
                     type="button"
                     onClick={() => setShowMapPicker(true)}
-                    className={`rounded-lg px-3.5 py-2.5 text-sm font-medium flex items-center justify-center gap-2 w-full ${isLight ? 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200' : 'bg-teal-900/30 text-teal-200 hover:bg-teal-800/50 border border-teal-600/50'}`}
+                    className={`rounded-xl px-3.5 py-3 text-base font-medium flex items-center justify-center gap-2 w-full min-h-12 ${isLight ? 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200' : 'bg-teal-900/30 text-teal-200 hover:bg-teal-800/50 border border-teal-600/50'}`}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.45-2.72A1 1 0 013 16.382V5.618a1 1 0 011.55-.832L9 7m0 13l6-3m-6 3V7m6 10l4.55 2.27a1 1 0 001.45-.83V5.618a1 1 0 00-.55-.832L15 4m0 0V4m0 0L9 7" /></svg>
                     Choisir sur la carte
@@ -1755,39 +2105,18 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
             <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3.5 py-2">{submitError}</p>
           )}
 
-          {showSuccessCheck && (
-            <div
-              className={`fixed inset-0 z-[101] flex items-center justify-center p-4 pointer-events-none transition-opacity duration-300 ${
-                successFadeOut ? 'opacity-0' : 'opacity-100'
-              }`}
-              role="status"
-              aria-live="polite"
-            >
-              <div
-                className={`flex flex-col items-center gap-3 rounded-lg px-8 py-6 shadow-xl text-center ${
-                  isLight ? 'bg-white text-emerald-600' : 'bg-gray-800 text-emerald-400'
-                }`}
-              >
-                <svg className="w-14 h-14 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-                <span className="text-lg font-semibold">{successMessage ?? 'Donnée enregistrée'}</span>
-              </div>
-            </div>
-          )}
-
           <div className={`flex gap-3 pt-4 border-t ${isLight ? 'border-gray-100' : 'border-gray-800'}`}>
             <button
               type="button"
               onClick={resetForm}
-              className={`py-2.5 px-3 rounded-xl text-sm font-medium ${isLight ? 'text-gray-500 hover:bg-gray-100 hover:text-gray-700' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-300'}`}
+              className={`min-h-12 py-2.5 px-3 rounded-xl text-base font-medium ${isLight ? 'text-gray-500 hover:bg-gray-100 hover:text-gray-700' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-300'}`}
             >
               Réinitialiser
             </button>
             <button
               type="button"
               onClick={handleClose}
-              className={`flex-1 py-3 rounded-lg text-sm font-medium ${isLight ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
+              className={`flex-1 min-h-12 py-3.5 rounded-xl text-base font-medium ${isLight ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
             >
               Annuler
             </button>
@@ -1795,14 +2124,105 @@ export default function ObservationModal({ isOpen, onClose, onSuccess, sitesRefr
               type="button"
               onClick={handleSubmit}
               disabled={submitLoading}
-              className="flex-1 py-3 rounded-lg text-sm font-medium bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50"
+              className="flex-1 min-h-12 py-3.5 rounded-xl text-base font-medium bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50"
             >
               {submitLoading ? 'Enregistrement…' : 'Ajouter la donnée'}
             </button>
           </div>
         </div>
+        )}
+        {showSuccessCheck && (
+          <div
+            className={`fixed inset-0 z-[101] flex items-center justify-center p-4 pointer-events-none transition-opacity duration-300 ${
+              successFadeOut ? 'opacity-0' : 'opacity-100'
+            }`}
+            role="status"
+            aria-live="polite"
+          >
+            <div
+              className={`flex flex-col items-center gap-3 rounded-lg px-8 py-6 shadow-xl text-center ${
+                isLight ? 'bg-white text-emerald-600' : 'bg-gray-800 text-emerald-400'
+              }`}
+            >
+              <svg className="w-14 h-14 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="text-lg font-semibold">{successMessage ?? 'Donnée enregistrée'}</span>
+            </div>
+          </div>
+        )}
         </div>
       </div>
+    {useGuided && (
+      <div
+        className={`shrink-0 z-20 border-t px-4 sm:px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${
+          isLight ? 'border-gray-200 bg-white' : 'border-gray-800 bg-gray-900'
+        }`}
+      >
+        {submitError && (
+          <p className="text-sm text-amber-600 dark:text-amber-400 mb-2 max-w-2xl mx-auto">{submitError}</p>
+        )}
+        <div className="max-w-2xl mx-auto flex flex-wrap items-stretch justify-center gap-2">
+          <button
+            type="button"
+            onClick={goPrevGuided}
+            disabled={guidedStepClamped <= 0}
+            className={`min-h-12 flex-1 min-w-[6rem] rounded-xl text-base font-medium border-2 ${
+              guidedStepClamped <= 0
+                ? 'opacity-40 border-transparent'
+                : isLight
+                  ? 'border-gray-200 text-gray-800 hover:bg-gray-50'
+                  : 'border-gray-600 text-gray-200 hover:bg-gray-800'
+            }`}
+          >
+            Précédent
+          </button>
+          {isGuidedObservationSkippableStep(guidedStepId) && guidedStepId !== 'recap' && (
+            <button
+              type="button"
+              onClick={passGuided}
+              className={`min-h-12 flex-1 min-w-[6rem] rounded-xl text-base font-medium ${
+                isLight ? 'text-sky-700 border border-sky-200' : 'text-sky-300 border border-sky-700'
+              }`}
+            >
+              Passer
+            </button>
+          )}
+          {guidedStepId === 'recap' ? (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitLoading}
+              className="min-h-12 flex-[2] min-w-[10rem] rounded-xl text-base font-semibold bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50"
+            >
+              {submitLoading ? 'Enregistrement…' : observationToEdit?.id ? 'Enregistrer' : 'Enregistrer l’observation'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={goNextGuided}
+              disabled={
+                guidedStepId === 'gps' && (latitude == null || longitude == null)
+              }
+              className={`min-h-12 flex-[2] min-w-[10rem] rounded-xl text-base font-semibold ${
+                guidedStepId === 'gps' && (latitude == null || longitude == null)
+                  ? isLight
+                    ? 'bg-gray-200 text-gray-500'
+                    : 'bg-gray-700 text-gray-500'
+                  : 'bg-teal-600 text-white hover:bg-teal-700'
+              }`}
+            >
+              {guidedStepId === 'gps' && (latitude == null || longitude == null) ? 'Position requise' : 'Suivant'}
+            </button>
+          )}
+        </div>
+        <div className="max-w-2xl mx-auto flex flex-wrap justify-center gap-2 mt-2 text-sm">
+          <button type="button" onClick={handleClose} className={isLight ? 'text-gray-500' : 'text-gray-400'}>
+            Fermer le formulaire
+          </button>
+        </div>
+      </div>
+    )}
     </div>
     {/* Modale d'info Données opportunistes */}
     {showDonneesOpportunistesInfo && (

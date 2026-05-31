@@ -88,13 +88,7 @@ function CommunauteContent() {
   }
 
   return (
-    <>
-      <style jsx>{`
-        .section-title {
-          color: white !important;
-        }
-      `}</style>
-      <div className="space-y-6">
+    <div className="space-y-6">
       {/* Carte interactive */}
       <div className="relative">
         <CarteCorseReact onRegionClick={handleRegionClick} />
@@ -105,7 +99,13 @@ function CommunauteContent() {
         <div className="mx-4 mb-4">
           <div className="relative group">
             {/* Fond principal avec effet de verre */}
-            <div className="bg-gradient-to-r from-slate-800/40 via-slate-700/30 to-slate-800/40 backdrop-blur-xl border border-slate-600/20 rounded-xl p-3 shadow-lg shadow-slate-900/20">
+            <div
+              className={`rounded-2xl border p-3 shadow-sm backdrop-blur-sm ${
+                theme === 'light'
+                  ? 'border-slate-200/80 bg-gradient-to-r from-white to-slate-50/90'
+                  : 'border-white/10 bg-gradient-to-r from-slate-800/50 to-slate-800/30 shadow-slate-900/20'
+              }`}
+            >
               {/* Effet de brillance subtile */}
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.02] to-transparent rounded-xl"></div>
               
@@ -155,10 +155,18 @@ function CommunauteContent() {
         <div className="space-y-4">
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-600/40"></div>
+              <div
+                className={`w-full border-t ${theme === 'light' ? 'border-slate-200/80' : 'border-white/10'}`}
+              />
             </div>
             <div className="relative flex justify-center">
-              <span className={`bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 px-6 py-2 text-sm font-semibold text-white tracking-wide uppercase section-title`}>
+              <span
+                className={`rounded-full px-5 py-2 text-[11px] font-bold uppercase tracking-widest ${
+                  theme === 'light'
+                    ? 'border border-slate-200/90 bg-white text-slate-800 shadow-sm'
+                    : 'border border-white/10 bg-slate-800/90 text-white'
+                }`}
+              >
                 Formations ({activitiesByType.Formation.length})
               </span>
             </div>
@@ -166,42 +174,71 @@ function CommunauteContent() {
           <div className="space-y-3">
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-400"></div>
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500/25 border-b-emerald-500" />
               </div>
             ) : (
               <>
                 {activitiesByType.Formation.length > 0 ? (
                   activitiesByType.Formation.map((activity) => (
-                    <div key={activity.id} className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20 hover:bg-white/15 transition-all duration-300">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className={`${theme === 'light' ? 'text-black' : 'text-white'} font-semibold text-lg`}>{activity.name}</h4>
-                        <div className={`text-xs ${theme === 'light' ? 'text-black/70' : 'text-white/70'} bg-white/10 px-2 py-1 rounded-full`}>
+                    <div
+                      key={activity.id}
+                      className={`rounded-2xl border p-4 transition-all duration-300 ${
+                        theme === 'light'
+                          ? 'border-slate-200/80 bg-white/95 shadow-sm hover:shadow-md'
+                          : 'border-white/10 bg-white/[0.06] hover:bg-white/[0.08]'
+                      }`}
+                    >
+                      <div className="mb-2 flex items-start justify-between">
+                        <h4
+                          className={`text-lg font-semibold ${
+                            theme === 'light' ? 'text-slate-900' : 'text-white'
+                          }`}
+                        >
+                          {activity.name}
+                        </h4>
+                        <div
+                          className={`rounded-full px-2.5 py-1 text-xs ${
+                            theme === 'light'
+                              ? 'bg-slate-100 text-slate-700'
+                              : 'bg-white/10 text-slate-200'
+                          }`}
+                        >
                           {formatDateToDDMMYYYY(activity.activity_date || '')}
                         </div>
                       </div>
-                      <p className={`${theme === 'light' ? 'text-black/80' : 'text-white/80'} text-sm mb-3`}>{activity.description}</p>
-                      <div className={`flex justify-between items-center text-xs ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
+                      <p
+                        className={`mb-3 text-sm ${
+                          theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+                        }`}
+                      >
+                        {activity.description}
+                      </p>
+                      <div
+                        className={`flex items-center justify-between text-xs ${
+                          theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                        }`}
+                      >
                         <span>📍 {activity.location || 'Lieu à préciser'}</span>
                         <span>👤 {activity.creator_name}</span>
                       </div>
                       {activity.activity_time && (
-                        <div className={`text-xs ${theme === 'light' ? 'text-black/60' : 'text-white/60'} mt-1`}>
+                        <div
+                          className={`mt-1 text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-500'}`}
+                        >
                           🕒 {formatTimeToHHMM(activity.activity_time || '')}
                         </div>
                       )}
-                      {/* Bande d'intérêt */}
                       <div className="mt-3">
                         <ActivityInterestBand activityId={activity.id || ''} />
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className={`text-center py-8 ${theme === 'light' ? 'text-black/60' : 'text-slate-400'}`}>
+                  <div className={`text-center py-8 ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
                     <div className="text-sm">
-                      {selectedRegion 
+                      {selectedRegion
                         ? `Aucune formation prévue pour ${selectedRegion}`
-                        : 'Aucune formation prévue pour le moment'
-                      }
+                        : 'Aucune formation prévue pour le moment'}
                     </div>
                   </div>
                 )}
@@ -214,10 +251,18 @@ function CommunauteContent() {
         <div className="space-y-4">
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-600/40"></div>
+              <div
+                className={`w-full border-t ${theme === 'light' ? 'border-slate-200/80' : 'border-white/10'}`}
+              />
             </div>
             <div className="relative flex justify-center">
-              <span className={`bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 px-6 py-2 text-sm font-semibold text-white tracking-wide uppercase section-title`}>
+              <span
+                className={`rounded-full px-5 py-2 text-[11px] font-bold uppercase tracking-widest ${
+                  theme === 'light'
+                    ? 'border border-slate-200/90 bg-white text-slate-800 shadow-sm'
+                    : 'border border-white/10 bg-slate-800/90 text-white'
+                }`}
+              >
                 Conférences ({activitiesByType.Conférence.length})
               </span>
             </div>
@@ -225,37 +270,67 @@ function CommunauteContent() {
           <div className="space-y-3">
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-400"></div>
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500/25 border-b-emerald-500" />
               </div>
             ) : (
               <>
                 {activitiesByType.Conférence.length > 0 ? (
                   activitiesByType.Conférence.map((activity) => (
-                    <div key={activity.id} className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20 hover:bg-white/15 transition-all duration-300">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className={`${theme === 'light' ? 'text-black' : 'text-white'} font-semibold text-lg`}>{activity.name}</h4>
-                        <div className={`text-xs ${theme === 'light' ? 'text-black/70' : 'text-white/70'} bg-white/10 px-2 py-1 rounded-full`}>
+                    <div
+                      key={activity.id}
+                      className={`rounded-2xl border p-4 transition-all duration-300 ${
+                        theme === 'light'
+                          ? 'border-slate-200/80 bg-white/95 shadow-sm hover:shadow-md'
+                          : 'border-white/10 bg-white/[0.06] hover:bg-white/[0.08]'
+                      }`}
+                    >
+                      <div className="mb-2 flex items-start justify-between">
+                        <h4
+                          className={`text-lg font-semibold ${
+                            theme === 'light' ? 'text-slate-900' : 'text-white'
+                          }`}
+                        >
+                          {activity.name}
+                        </h4>
+                        <div
+                          className={`rounded-full px-2.5 py-1 text-xs ${
+                            theme === 'light'
+                              ? 'bg-slate-100 text-slate-700'
+                              : 'bg-white/10 text-slate-200'
+                          }`}
+                        >
                           {formatDateToDDMMYYYY(activity.activity_date || '')}
                         </div>
                       </div>
-                      <p className={`${theme === 'light' ? 'text-black/80' : 'text-white/80'} text-sm mb-3`}>{activity.description}</p>
-                      <div className={`flex justify-between items-center text-xs ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
+                      <p
+                        className={`mb-3 text-sm ${
+                          theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+                        }`}
+                      >
+                        {activity.description}
+                      </p>
+                      <div
+                        className={`flex items-center justify-between text-xs ${
+                          theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                        }`}
+                      >
                         <span>📍 {activity.location || 'Lieu à préciser'}</span>
                         <span>👤 {activity.creator_name}</span>
                       </div>
                       {activity.activity_time && (
-                        <div className={`text-xs ${theme === 'light' ? 'text-black/60' : 'text-white/60'} mt-1`}>
+                        <div
+                          className={`mt-1 text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-500'}`}
+                        >
                           🕒 {formatTimeToHHMM(activity.activity_time || '')}
                         </div>
                       )}
-                      {/* Bande d'intérêt */}
                       <div className="mt-3">
                         <ActivityInterestBand activityId={activity.id || ''} />
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className={`text-center py-8 ${theme === 'light' ? 'text-black/60' : 'text-slate-400'}`}>
+                  <div className={`text-center py-8 ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
                     <div className="text-sm">
                       {selectedRegion 
                         ? `Aucune conférence prévue pour ${selectedRegion}`
@@ -273,10 +348,18 @@ function CommunauteContent() {
         <div className="space-y-4">
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-600/40"></div>
+              <div
+                className={`w-full border-t ${theme === 'light' ? 'border-slate-200/80' : 'border-white/10'}`}
+              />
             </div>
             <div className="relative flex justify-center">
-              <span className={`bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 px-6 py-2 text-sm font-semibold text-white tracking-wide uppercase section-title`}>
+              <span
+                className={`rounded-full px-5 py-2 text-[11px] font-bold uppercase tracking-widest ${
+                  theme === 'light'
+                    ? 'border border-slate-200/90 bg-white text-slate-800 shadow-sm'
+                    : 'border border-white/10 bg-slate-800/90 text-white'
+                }`}
+              >
                 Bénévolat ({activitiesByType.Bénévolat.length})
               </span>
             </div>
@@ -284,37 +367,67 @@ function CommunauteContent() {
           <div className="space-y-3">
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-400"></div>
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500/25 border-b-emerald-500" />
               </div>
             ) : (
               <>
                 {activitiesByType.Bénévolat.length > 0 ? (
                   activitiesByType.Bénévolat.map((activity) => (
-                    <div key={activity.id} className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20 hover:bg-white/15 transition-all duration-300">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className={`${theme === 'light' ? 'text-black' : 'text-white'} font-semibold text-lg`}>{activity.name}</h4>
-                        <div className={`text-xs ${theme === 'light' ? 'text-black/70' : 'text-white/70'} bg-white/10 px-2 py-1 rounded-full`}>
+                    <div
+                      key={activity.id}
+                      className={`rounded-2xl border p-4 transition-all duration-300 ${
+                        theme === 'light'
+                          ? 'border-slate-200/80 bg-white/95 shadow-sm hover:shadow-md'
+                          : 'border-white/10 bg-white/[0.06] hover:bg-white/[0.08]'
+                      }`}
+                    >
+                      <div className="mb-2 flex items-start justify-between">
+                        <h4
+                          className={`text-lg font-semibold ${
+                            theme === 'light' ? 'text-slate-900' : 'text-white'
+                          }`}
+                        >
+                          {activity.name}
+                        </h4>
+                        <div
+                          className={`rounded-full px-2.5 py-1 text-xs ${
+                            theme === 'light'
+                              ? 'bg-slate-100 text-slate-700'
+                              : 'bg-white/10 text-slate-200'
+                          }`}
+                        >
                           {formatDateToDDMMYYYY(activity.activity_date || '')}
                         </div>
                       </div>
-                      <p className={`${theme === 'light' ? 'text-black/80' : 'text-white/80'} text-sm mb-3`}>{activity.description}</p>
-                      <div className={`flex justify-between items-center text-xs ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
+                      <p
+                        className={`mb-3 text-sm ${
+                          theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+                        }`}
+                      >
+                        {activity.description}
+                      </p>
+                      <div
+                        className={`flex items-center justify-between text-xs ${
+                          theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                        }`}
+                      >
                         <span>📍 {activity.location || 'Lieu à préciser'}</span>
                         <span>👤 {activity.creator_name}</span>
                       </div>
                       {activity.activity_time && (
-                        <div className={`text-xs ${theme === 'light' ? 'text-black/60' : 'text-white/60'} mt-1`}>
+                        <div
+                          className={`mt-1 text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-500'}`}
+                        >
                           🕒 {formatTimeToHHMM(activity.activity_time || '')}
                         </div>
                       )}
-                      {/* Bande d'intérêt */}
                       <div className="mt-3">
                         <ActivityInterestBand activityId={activity.id || ''} />
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className={`text-center py-8 ${theme === 'light' ? 'text-black/60' : 'text-slate-400'}`}>
+                  <div className={`text-center py-8 ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
                     <div className="text-sm">
                       {selectedRegion 
                         ? `Aucune activité de bénévolat prévue pour ${selectedRegion}`
@@ -332,10 +445,18 @@ function CommunauteContent() {
         <div className="space-y-4">
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-600/40"></div>
+              <div
+                className={`w-full border-t ${theme === 'light' ? 'border-slate-200/80' : 'border-white/10'}`}
+              />
             </div>
             <div className="relative flex justify-center">
-              <span className={`bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 px-6 py-2 text-sm font-semibold text-white tracking-wide uppercase section-title`}>
+              <span
+                className={`rounded-full px-5 py-2 text-[11px] font-bold uppercase tracking-widest ${
+                  theme === 'light'
+                    ? 'border border-slate-200/90 bg-white text-slate-800 shadow-sm'
+                    : 'border border-white/10 bg-slate-800/90 text-white'
+                }`}
+              >
                 Sorties ({activitiesByType.Sortie.length})
               </span>
             </div>
@@ -343,37 +464,67 @@ function CommunauteContent() {
           <div className="space-y-3">
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-400"></div>
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500/25 border-b-emerald-500" />
               </div>
             ) : (
               <>
                 {activitiesByType.Sortie.length > 0 ? (
                   activitiesByType.Sortie.map((activity) => (
-                    <div key={activity.id} className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20 hover:bg-white/15 transition-all duration-300">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className={`${theme === 'light' ? 'text-black' : 'text-white'} font-semibold text-lg`}>{activity.name}</h4>
-                        <div className={`text-xs ${theme === 'light' ? 'text-black/70' : 'text-white/70'} bg-white/10 px-2 py-1 rounded-full`}>
+                    <div
+                      key={activity.id}
+                      className={`rounded-2xl border p-4 transition-all duration-300 ${
+                        theme === 'light'
+                          ? 'border-slate-200/80 bg-white/95 shadow-sm hover:shadow-md'
+                          : 'border-white/10 bg-white/[0.06] hover:bg-white/[0.08]'
+                      }`}
+                    >
+                      <div className="mb-2 flex items-start justify-between">
+                        <h4
+                          className={`text-lg font-semibold ${
+                            theme === 'light' ? 'text-slate-900' : 'text-white'
+                          }`}
+                        >
+                          {activity.name}
+                        </h4>
+                        <div
+                          className={`rounded-full px-2.5 py-1 text-xs ${
+                            theme === 'light'
+                              ? 'bg-slate-100 text-slate-700'
+                              : 'bg-white/10 text-slate-200'
+                          }`}
+                        >
                           {formatDateToDDMMYYYY(activity.activity_date || '')}
                         </div>
                       </div>
-                      <p className={`${theme === 'light' ? 'text-black/80' : 'text-white/80'} text-sm mb-3`}>{activity.description}</p>
-                      <div className={`flex justify-between items-center text-xs ${theme === 'light' ? 'text-black/60' : 'text-white/60'}`}>
+                      <p
+                        className={`mb-3 text-sm ${
+                          theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+                        }`}
+                      >
+                        {activity.description}
+                      </p>
+                      <div
+                        className={`flex items-center justify-between text-xs ${
+                          theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                        }`}
+                      >
                         <span>📍 {activity.location || 'Lieu à préciser'}</span>
                         <span>👤 {activity.creator_name}</span>
                       </div>
                       {activity.activity_time && (
-                        <div className={`text-xs ${theme === 'light' ? 'text-black/60' : 'text-white/60'} mt-1`}>
+                        <div
+                          className={`mt-1 text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-500'}`}
+                        >
                           🕒 {formatTimeToHHMM(activity.activity_time || '')}
                         </div>
                       )}
-                      {/* Bande d'intérêt */}
                       <div className="mt-3">
                         <ActivityInterestBand activityId={activity.id || ''} />
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className={`text-center py-8 ${theme === 'light' ? 'text-black/60' : 'text-slate-400'}`}>
+                  <div className={`text-center py-8 ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
                     <div className="text-sm">
                       {selectedRegion 
                         ? `Aucune sortie prévue pour ${selectedRegion}`
@@ -388,7 +539,6 @@ function CommunauteContent() {
         </div>
       </div>
     </div>
-    </>
   )
 }
 

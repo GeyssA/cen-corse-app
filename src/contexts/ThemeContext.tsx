@@ -7,6 +7,7 @@ type Theme = 'dark' | 'light'
 interface ThemeContextType {
   theme: Theme
   toggleTheme: () => void
+  setTheme: (theme: Theme) => void
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
@@ -25,19 +26,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
-    // Appliquer le thème au body pour les styles globaux
-    document.body.className = theme === 'dark' ? 'dark-theme' : 'light-theme'
-    // Meta theme-color pour PWA / navigateur (barre d’état)
+    // Thème (ne pas remplacer tout le className : polices, antialiased, etc.)
+    document.body.classList.remove('dark-theme', 'light-theme')
+    document.body.classList.add(theme === 'dark' ? 'dark-theme' : 'light-theme')
     const metaThemeColor = document.querySelector('meta[name="theme-color"]')
     if (metaThemeColor) {
-      metaThemeColor.setAttribute('content', theme === 'dark' ? '#111827' : '#f1f5f9')
+      // Page /auth (ScrollContainer) : teinte sombre figée pour la barre d’état, quel que soit le thème
+      const onAuth = document.body.getAttribute('data-auth-route') === 'true'
+      const content = onAuth ? '#111827' : theme === 'dark' ? '#111827' : '#f1f5f9'
+      metaThemeColor.setAttribute('content', content)
     }
-    // Sauvegarder le thème dans localStorage
     localStorage.setItem('theme', theme)
   }, [theme])
 
   const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark')
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
   }
 
   // Ne pas afficher le contenu avant que le thème soit chargé
@@ -46,7 +49,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   )

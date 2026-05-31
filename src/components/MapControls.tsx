@@ -47,17 +47,24 @@ interface MapBaseLayerSwitcherProps {
   currentLayer: BaseLayerId
   onChange: (id: BaseLayerId) => void
   dark?: boolean
+  /** z-index Tailwind (ex. z-[40]) si la carte est dans une modale avec d’autres overlays au-dessus */
+  overlayZClass?: string
 }
 
 /** Sélecteur de fond de carte (plan / satellite / relief) en overlay sur la carte */
-export function MapBaseLayerSwitcher({ currentLayer, onChange, dark = false }: MapBaseLayerSwitcherProps) {
+export function MapBaseLayerSwitcher({
+  currentLayer,
+  onChange,
+  dark = false,
+  overlayZClass = 'z-[1000]'
+}: MapBaseLayerSwitcherProps) {
   const bg = dark ? 'bg-gray-900/90 text-gray-100' : 'bg-white/95 text-gray-800'
   const border = dark ? 'border-gray-600' : 'border-gray-200'
   const btn = dark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
   const active = dark ? 'bg-teal-700/80 text-white' : 'bg-teal-100 text-teal-800'
   return (
     <div
-      className={`absolute top-3 right-3 z-[1000] rounded-lg border px-2 py-1.5 shadow-lg flex flex-col gap-0.5 ${bg} ${border}`}
+      className={`absolute top-3 right-3 ${overlayZClass} rounded-lg border px-2 py-1.5 shadow-lg flex flex-col gap-0.5 ${bg} ${border}`}
       aria-label="Fond de carte"
     >
       <span className="text-[10px] font-semibold uppercase tracking-wider opacity-80 px-1">Fond</span>
@@ -81,15 +88,24 @@ interface MapLegendProps {
   showObs?: boolean
   showLinearSites?: boolean
   dark?: boolean
+  /** z-index Tailwind, aligné sur MapBaseLayerSwitcher dans les mêmes contextes */
+  overlayZClass?: string
 }
 
 /** Légende flottante (overlay sur la carte) */
-export function MapLegend({ showUser = true, showSites = true, showObs = true, showLinearSites = false, dark = false }: MapLegendProps) {
+export function MapLegend({
+  showUser = true,
+  showSites = true,
+  showObs = true,
+  showLinearSites = false,
+  dark = false,
+  overlayZClass = 'z-[1000]'
+}: MapLegendProps) {
   const bg = dark ? 'bg-gray-900/90 text-gray-100' : 'bg-white/95 text-gray-800'
   const border = dark ? 'border-gray-600' : 'border-gray-200'
   return (
     <div
-      className={`absolute bottom-12 left-3 z-[1000] rounded-lg border px-3 py-2 text-xs shadow-lg ${bg} ${border}`}
+      className={`absolute bottom-12 left-3 ${overlayZClass} rounded-lg border px-3 py-2 text-xs shadow-lg ${bg} ${border}`}
       aria-hidden
     >
       <div className="font-semibold mb-1.5 opacity-90">Légende</div>

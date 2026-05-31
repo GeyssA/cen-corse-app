@@ -7,6 +7,7 @@ import { createObservation } from './observations'
 import { createSite } from './sites'
 import { uploadPhoto } from './uploadPhoto'
 import { serializePhotoUrls } from './photoUrls'
+import { validatePhotoFileForUpload } from './photoUploadLimits'
 import { invalidateMapDataCache } from './mapDataCache'
 import type { Observation } from './observations'
 
@@ -171,8 +172,17 @@ export async function runSync(): Promise<{ synced: number; errors: string[] }> {
         const urls: string[] = []
         for (const sp of item.photos) {
           const file = storedPhotoToFile(sp)
-          const url = await uploadPhoto(file, 'observation', item.payload.user_id)
-          if (url) urls.push(url)
+          const v = validatePhotoFileForUpload(file)
+          if (v) {
+            errors.push(`Photo : ${v}`)
+            continue
+          }
+          const r = await uploadPhoto(file, 'observation', item.payload.user_id)
+          if (r.ok) {
+            urls.push(r.publicUrl)
+          } else {
+            errors.push(`Photo : ${r.message}`)
+          }
         }
         photo_url = serializePhotoUrls(urls) ?? undefined
       }
@@ -199,8 +209,17 @@ export async function runSync(): Promise<{ synced: number; errors: string[] }> {
         const urls: string[] = []
         for (const sp of item.photos) {
           const file = storedPhotoToFile(sp)
-          const url = await uploadPhoto(file, 'site', item.payload.user_id)
-          if (url) urls.push(url)
+          const v = validatePhotoFileForUpload(file)
+          if (v) {
+            errors.push(`Photo site : ${v}`)
+            continue
+          }
+          const r = await uploadPhoto(file, 'site', item.payload.user_id)
+          if (r.ok) {
+            urls.push(r.publicUrl)
+          } else {
+            errors.push(`Photo site : ${r.message}`)
+          }
         }
         photo_url = serializePhotoUrls(urls)
       }

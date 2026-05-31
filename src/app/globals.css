@@ -77,7 +77,7 @@ body.light-theme .scroll-container {
   padding-bottom: calc(3.5rem + max(env(safe-area-inset-bottom, 0px), 16px));
 }
 
-/* Page auth : pas de bandeau. Pas de scroll en bas sur le login ; scroll uniquement sur "Créer un compte" / "Mot de passe oublié" (via body.auth-needs-scroll). Fond = même dégradé que la page. */
+/* Page auth : pas de bandeau. Même apparence en tout temps (thème in-app = jour/nuit) : dégradé sombre fixe. */
 .scroll-container.scroll-container-auth {
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: 0;
@@ -85,8 +85,14 @@ body.light-theme .scroll-container {
   min-height: 100dvh;
   background: linear-gradient(to bottom right, #111827, #1f2937, #0f172a);
 }
+/* Ne pas hériter du fond clair du thème : évite la bande / bord haut clair (statut) incohérente */
 body.light-theme .scroll-container.scroll-container-auth {
-  background: #f1f5f9;
+  background: linear-gradient(to bottom right, #111827, #1f2937, #0f172a);
+}
+/* Connexion : fond d’écran cohérent (évite bords bleu clair du light-theme sur les côtés) */
+body.light-theme[data-auth-route='true'] {
+  background: #111827;
+  color: #ffffff;
 }
 body.auth-needs-scroll .scroll-container.scroll-container-auth {
   padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
@@ -105,6 +111,13 @@ body.auth-needs-scroll .scroll-container.scroll-container-auth {
   padding-top: 0 !important;
   padding-bottom: calc(5rem + max(env(safe-area-inset-bottom, 0px), 20px));
   min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Pont OAuth app : aucune marge, pas de scroll — écran « splash » uniquement */
+.scroll-container.scroll-container-oauth-app {
+  padding: 0 !important;
+  overflow: hidden !important;
   min-height: 100dvh;
 }
 
@@ -317,6 +330,10 @@ body.light-theme .modern-card {
 
 body.light-theme .text-white {
   color: #1a1a1a;
+}
+/* Page /auth : maquette fixe sombre — ne pas inverser .text-white (bouton Apple, icônes) */
+body.light-theme[data-auth-route='true'] .text-white {
+  color: #ffffff;
 }
 
 body.light-theme .text-gray-300 {

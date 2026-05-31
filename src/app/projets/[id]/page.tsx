@@ -1,18 +1,14 @@
-import ProjectDetailsClient from './ProjectDetailsClient'
-import { defaultProjects } from './projectsData'
+import { redirect } from 'next/navigation'
 
-export const dynamic = 'force-static'
-
+/**
+ * Obligatoire pour `output: export` sur une route dynamique.
+ * On génère une entrée technique, mais la page redirige toujours vers `/projets`.
+ */
 export async function generateStaticParams() {
-  return defaultProjects.map(({ id }) => ({ id: id.toString() }))
+  return [{ id: 'legacy' }]
 }
 
-interface ProjectDetailsPageProps {
-  params: { id: string }
+/** Les anciennes URLs fiche-projet ne sont plus maintenues dans l’app. */
+export default function ProjetsDetailRedirect() {
+  redirect('/projets')
 }
-
-export default function ProjectDetailsPage({ params }: ProjectDetailsPageProps) {
-  const projectId = Number(params.id)
-  return <ProjectDetailsClient projectId={projectId} initialProjects={defaultProjects} />
-}
-

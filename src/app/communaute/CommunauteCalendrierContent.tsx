@@ -147,11 +147,13 @@ export default function CommunauteCalendrierContent() {
       </div>
 
       {/* Grille du calendrier */}
-      <div className={`rounded-2xl p-4 shadow-2xl border ${
-        theme === 'light'
-          ? 'bg-white/80 border-gray-200'
-          : 'glass-effect border-white/10'
-      }`}>
+      <div
+        className={`rounded-2xl border p-4 shadow-sm ${
+          theme === 'light'
+            ? 'border-slate-200/80 bg-white/90'
+            : 'border-white/10 bg-white/[0.05] backdrop-blur-sm'
+        }`}
+      >
         {/* Jours de la semaine */}
         <div className="grid grid-cols-7 gap-1 mb-2">
           {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((day) => (
@@ -189,7 +191,11 @@ export default function CommunauteCalendrierContent() {
                 } ${
                   isToday ? (theme === 'light' ? 'bg-emerald-100 text-emerald-800' : 'bg-emerald-800 text-white') + ' font-semibold' : ''
                 } ${
-                  dayActivities.length > 0 ? (theme === 'light' ? 'bg-blue-50 border border-blue-200' : 'bg-blue-900/30 border border-blue-400/30') : ''
+                  dayActivities.length > 0
+                    ? (theme === 'light'
+                        ? 'border border-emerald-200/80 bg-emerald-50/90'
+                        : 'border border-emerald-500/30 bg-emerald-950/40') + ' '
+                    : ''
                 }`}
               >
                 <div className="text-center">
@@ -197,7 +203,10 @@ export default function CommunauteCalendrierContent() {
                   {dayActivities.length > 0 && (
                     <div className="mt-1 space-y-1">
                       {dayActivities.slice(0, 2).map((activity, index) => (
-                        <div key={`${activity.id!}-${index}`} className="w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full"></div>
+                        <div
+                          key={`${activity.id!}-${index}`}
+                          className="h-1 w-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500"
+                        />
                       ))}
                       {dayActivities.length > 2 && (
                         <div className={`text-xs font-medium ${theme === 'light' ? 'text-blue-600' : 'text-blue-300'}`}>+{dayActivities.length - 2}</div>

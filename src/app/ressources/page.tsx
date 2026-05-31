@@ -34,7 +34,6 @@ export default function RessourcesPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { theme } = useTheme()
-  const [showOnboarding, setShowOnboarding] = useState(false)
   const [activeTab, setActiveTab] = useState('supports')
 
   // Détecter le paramètre tab dans l'URL
@@ -51,16 +50,16 @@ export default function RessourcesPage() {
 
   return (
     <ProtectedRoute>
-      {/* Bandeau fixe : même couleur que la barre système, sans ligne */}
-      <header className="app-header-bar w-full flex items-center justify-center">
-        <div className="max-w-sm sm:max-w-md md:max-w-lg lg:max-w-1xl mx-auto px-0 sm:px-3 md:px-5 w-full h-full flex items-center justify-between py-0.5">
-          <div className="flex items-center min-h-0">
+      <header className="app-header-bar flex h-full w-full items-center justify-center">
+        <div className="mx-auto flex h-full w-full max-w-sm items-center justify-between px-0 py-0.5 sm:max-w-md sm:px-3 md:max-w-lg md:px-5 lg:max-w-1xl">
+          <div className="flex min-h-0 items-center">
             <button
-              onClick={() => setShowOnboarding(true)}
-              className="rounded-md flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shadow-md hover:shadow-lg bg-white"
+              type="button"
+              onClick={() => router.push('/')}
+              className="flex cursor-pointer items-center justify-center overflow-hidden rounded-md bg-white shadow-md transition-all duration-300 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]"
               style={{ width: 'clamp(120px, 30vw, 172px)', height: 'clamp(34px, 9vw, 44px)' }}
             >
-              <img src="/Logo_CENCorse.png" alt="CEN Corse" className="h-9 w-auto max-w-[160px] object-contain block" />
+              <img src="/Logo_CENCorse.png" alt="CEN Corse" className="block h-9 w-auto max-w-[160px] object-contain" />
             </button>
           </div>
           <div className="flex-shrink-0">
@@ -69,21 +68,16 @@ export default function RessourcesPage() {
         </div>
       </header>
 
-      {/* Fond adaptatif pour la section principale */}
-      <div className={`min-h-screen w-full overflow-x-hidden transition-all duration-300 ${
-        theme === 'dark' 
-          ? 'bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900' 
-          : 'bg-gradient-to-b from-blue-50 via-blue-100 to-blue-200'
-      }`}>
-        {/* Navigation par onglets */}
-        <SubTabs 
-          tabs={subTabs} 
-          activeTab={activeTab} 
-          onTabChange={handleTabChange}
-        />
+      <SubTabs tabs={subTabs} activeTab={activeTab} onTabChange={handleTabChange} />
 
-        {/* Contenu principal */}
-        <main className="max-w-lg mx-auto px-4 pt-3 pb-4 space-y-6 w-full overflow-x-hidden">
+      <div
+        className={`min-h-screen w-full overflow-x-hidden transition-all duration-300 ${
+          theme === 'dark'
+            ? 'bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950'
+            : 'bg-gradient-to-b from-slate-50 via-emerald-50/40 to-slate-100'
+        }`}
+      >
+        <main className="mx-auto w-full max-w-3xl space-y-6 overflow-x-hidden px-4 pb-8 pt-2 sm:px-5">
           {activeTab === 'supports' ? (
             <LazyRessourcesContent />
           ) : (

@@ -50,26 +50,27 @@ export default function CommunautePage() {
 
   return (
     <ProtectedRoute>
-      {/* Bandeau fixe : même couleur que la barre système, sans ligne */}
-      <header className="app-header-bar w-full flex items-center justify-center">
-        <div className="max-w-sm sm:max-w-md md:max-w-lg lg:max-w-1xl mx-auto px-0 sm:px-3 md:px-5 w-full h-full flex items-center justify-between py-0.5">
-          <div className="flex items-center min-h-0">
+      <header className="app-header-bar flex h-full w-full items-center justify-center">
+        <div className="mx-auto flex h-full w-full max-w-sm items-center justify-between px-0 py-0.5 sm:max-w-md sm:px-3 md:max-w-lg md:px-5 lg:max-w-1xl">
+          <div className="flex min-h-0 items-center">
             <button
+              type="button"
               onClick={() => router.push('/')}
-              className="rounded-md flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shadow-md hover:shadow-lg bg-white"
+              className="flex cursor-pointer items-center justify-center overflow-hidden rounded-md bg-white shadow-md transition-all duration-300 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]"
               style={{ width: 'clamp(120px, 30vw, 172px)', height: 'clamp(34px, 9vw, 44px)' }}
             >
-              <img src="/Logo_CENCorse.png" alt="CEN Corse" className="h-9 w-auto max-w-[160px] object-contain block" />
+              <img src="/Logo_CENCorse.png" alt="CEN Corse" className="block h-9 w-auto max-w-[160px] object-contain" />
             </button>
           </div>
-          <div className="flex items-center justify-center flex-1">
+          <div className="flex flex-1 items-center justify-center">
             {profile?.role === 'admin' && (
               <button
+                type="button"
                 onClick={() => setShowAddModal(true)}
-                className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center text-white shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 bg-gradient-to-br from-emerald-500 to-teal-600"
+                className="flex h-8 w-8 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 sm:h-10 sm:w-10"
                 title="Ajouter une activité"
               >
-                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
               </button>
@@ -81,21 +82,16 @@ export default function CommunautePage() {
         </div>
       </header>
 
-      {/* Sous-onglets */}
-      <SubTabs 
-        tabs={subTabs}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-      />
+      <SubTabs tabs={subTabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
-      {/* Fond adaptatif pour la section principale */}
-      <div className={`min-h-screen w-full overflow-x-hidden transition-all duration-300 ${
-        theme === 'dark' 
-          ? 'bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900' 
-          : 'bg-gradient-to-b from-blue-50 via-blue-100 to-blue-200'
-      }`}>
-        {/* Contenu principal */}
-        <main className="max-w-lg mx-auto px-4 pt-1 pb-2 space-y-4 w-full overflow-x-hidden">
+      <div
+        className={`min-h-screen w-full overflow-x-hidden transition-all duration-300 ${
+          theme === 'dark'
+            ? 'bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950'
+            : 'bg-gradient-to-b from-slate-50 via-emerald-50/40 to-slate-100'
+        }`}
+      >
+        <main className="mx-auto w-full max-w-3xl space-y-4 overflow-x-hidden px-4 pb-8 pt-2 sm:px-5">
           {activeTab === 'activites' ? (
             <LazyCommunauteActivitesContent />
           ) : (

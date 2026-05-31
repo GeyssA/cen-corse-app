@@ -4,13 +4,15 @@ import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AmbienceProvider } from "@/contexts/AmbienceContext";
-import { ProjectsProvider } from "@/contexts/ProjectsContext";
 import { ToastProvider } from "@/components/ui/ToastProvider";
 import OfflineSync from "@/components/OfflineSync";
 import ScrollContainer from "@/components/ScrollContainer";
 import NoPullToRefresh from "@/components/NoPullToRefresh";
 import CapacitorStatusBar from "./layout-capacitor-statusbar";
 import DisplayNameGate from "@/components/auth/DisplayNameGate";
+import NativeAuthDeepLink from "@/components/auth/NativeAuthDeepLink";
+import AppUpdateModal from "@/components/AppUpdateModal";
+import ThemePreferenceModal from "@/components/ThemePreferenceModal";
 // import Script from "next/script";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -106,9 +108,11 @@ export default function RootLayout({
         )}
         <AuthProvider>
           <ThemeProvider>
-            <CapacitorStatusBar />
-            <AmbienceProvider>
-              <ProjectsProvider>
+            <AppUpdateModal>
+              <ThemePreferenceModal />
+              <NativeAuthDeepLink />
+              <CapacitorStatusBar />
+              <AmbienceProvider>
                 <ToastProvider>
                   <OfflineSync />
                   <DisplayNameGate />
@@ -116,8 +120,8 @@ export default function RootLayout({
                     {children}
                   </ScrollContainer>
                 </ToastProvider>
-              </ProjectsProvider>
-            </AmbienceProvider>
+              </AmbienceProvider>
+            </AppUpdateModal>
           </ThemeProvider>
         </AuthProvider>
       </body>

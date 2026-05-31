@@ -110,3 +110,62 @@ export async function updateObservationPhotoUrls(
     return { error: err }
   }
 }
+
+type ObservationUpdatePayload = Partial<
+  Omit<Observation, 'id' | 'created_at' | 'validated' | 'validated_at'>
+>
+
+/** Met à jour une observation existante (champs métier + position + photos). */
+export async function updateObservation(
+  id: string,
+  data: ObservationUpdatePayload
+): Promise<{ error: string | null }> {
+  try {
+    const row = Object.fromEntries(
+      Object.entries(data).filter(([, v]) => v !== undefined)
+    ) as Record<string, unknown>
+    const { error } = await supabase.from('observations').update(row).eq('id', id)
+    if (error) {
+      const msg = error.message || error.details || error.hint || JSON.stringify(error) || 'Erreur inconnue'
+      console.error('Erreur mise à jour observation:', error)
+      return { error: msg }
+    }
+    return { error: null }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('Erreur inattendue mise à jour observation:', e)
+    return { error: msg }
+  }
+}
+
+export async function deleteObservation(id: string): Promise<{ error: string | null }> {
+  try {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+    if (userError || !user) {
+      return { error: 'Utilisateur non authentifié.' }
+    }
+
+    const { data, error } = await supabase
+      .from('observations')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .select('id')
+    if (error) {
+      const msg = error.message || error.details || error.hint || JSON.stringify(error) || 'Erreur inconnue'
+      console.error('Erreur suppression observation:', error)
+      return { error: msg }
+    }
+    if (!data || data.length === 0) {
+      return { error: "Aucune observation supprimée (droits insuffisants ou donnée introuvable)." }
+    }
+    return { error: null }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('Erreur inattendue suppression observation:', e)
+    return { error: msg }
+  }
+}

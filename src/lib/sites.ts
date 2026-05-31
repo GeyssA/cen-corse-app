@@ -143,3 +143,68 @@ export async function updateSitePhotoUrls(
     return { error: err }
   }
 }
+
+type SiteUpdatePayload = Partial<
+  Pick<
+    ObservationSite,
+    | 'date'
+    | 'protocole'
+    | 'nom_du_site'
+    | 'latitude'
+    | 'longitude'
+    | 'photo_url'
+    | 'path_coordinates'
+    | 'length_meters'
+  >
+>
+
+export async function updateSite(siteId: string, patch: SiteUpdatePayload): Promise<{ error: string | null }> {
+  try {
+    const row = Object.fromEntries(
+      Object.entries(patch).filter(([, v]) => v !== undefined)
+    ) as Record<string, unknown>
+    const { error } = await supabase.from('observation_sites').update(row).eq('id', siteId)
+    if (error) {
+      const msg = error.message || error.details || error.hint || JSON.stringify(error) || 'Erreur inconnue'
+      console.error('Erreur mise à jour site:', error)
+      return { error: msg }
+    }
+    return { error: null }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('Erreur inattendue mise à jour site:', e)
+    return { error: msg }
+  }
+}
+
+export async function deleteSite(siteId: string): Promise<{ error: string | null }> {
+  try {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+    if (userError || !user) {
+      return { error: 'Utilisateur non authentifié.' }
+    }
+
+    const { data, error } = await supabase
+      .from('observation_sites')
+      .delete()
+      .eq('id', siteId)
+      .eq('user_id', user.id)
+      .select('id')
+    if (error) {
+      const msg = error.message || error.details || error.hint || JSON.stringify(error) || 'Erreur inconnue'
+      console.error('Erreur suppression site:', error)
+      return { error: msg }
+    }
+    if (!data || data.length === 0) {
+      return { error: "Aucun site supprimé (droits insuffisants ou donnée introuvable)." }
+    }
+    return { error: null }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('Erreur inattendue suppression site:', e)
+    return { error: msg }
+  }
+}

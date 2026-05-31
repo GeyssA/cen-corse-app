@@ -1,50 +1,36 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 // import { useAuth } from '@/contexts/AuthContext' // Temporairement commenté car non utilisé
 import { useTheme } from '@/contexts/ThemeContext'
 import ProtectedRoute from '@/components/auth/ProtectedRoute'
+import { useGaleriePhotos } from '@/hooks/useGaleriePhotos'
+import { appStaticMediaUrl } from '@/lib/app-static-media'
 
-// Liste des photos disponibles avec leurs noms
-const PHOTOS = [
-  {
-    src: '/photos_page_accueil/Plaine de Linguizzetta-2025-© Geyssels A..jpg',
-    name: 'Plaine de Linguizzetta\n2025\n© Geyssels A.'
-  },
-  {
-    src: '/photos_page_accueil/Col du Monaco-Pianottoli Caldarello-2024-© Geyssels A..jpg',
-    name: 'Col du Monaco\nPianottoli Caldarello\n2024\n© Geyssels A.'
-  },
-  {
-    src: '/photos_page_accueil/Bufotes viridis balearicus-Lucciana-2011-© Hamoric N..jpg',
-    name: 'Bufotes viridis balearicus\nLucciana\n2011\n© Hamoric N.'
-  },
-  {
-    src: '/photos_page_accueil/Bufotes viridis balericus-Boziu (1100 mètres d\'altitude)-2025-© Ertzscheid N..jpg',
-    name: 'Bufotes viridis balearicus\nBoziu (1100 m)\n2025\n© Ertzscheid N.'
-  },
-  {
-    src: '/photos_page_accueil/Amplexus de Bufotes viridis balericus-Boziu (1100 mètres d\'altitude)-2025-© Ertzscheid N..jpg',
-    name: 'Amplexus de Bufotes viridis balearicus\nBoziu (1100 m)\n2025\n© Ertzscheid N.'
-  }
-]
-
-// Composant carrousel de photos
+// Composant carrousel de photos (galerie Supabase : galerie_photos)
 function PhotoCarousel() {
+  const { photos, loading, error } = useGaleriePhotos()
   const [currentIndex, setCurrentIndex] = useState(0)
   const [touchStart, setTouchStart] = useState<number | null>(null)
   const [touchEnd, setTouchEnd] = useState<number | null>(null)
   const router = useRouter()
+  const len = photos.length
+
+  useEffect(() => {
+    if (len > 0 && currentIndex >= len) setCurrentIndex(0)
+  }, [len, currentIndex])
 
   // Navigation
   const nextPhoto = () => {
-    setCurrentIndex((prev) => (prev + 1) % PHOTOS.length)
+    if (len === 0) return
+    setCurrentIndex((prev) => (prev + 1) % len)
   }
 
   const prevPhoto = () => {
-    setCurrentIndex((prev) => (prev - 1 + PHOTOS.length) % PHOTOS.length)
+    if (len === 0) return
+    setCurrentIndex((prev) => (prev - 1 + len) % len)
   }
 
   // Gestion du swipe pour mobile
@@ -74,7 +60,32 @@ function PhotoCarousel() {
     setTouchEnd(null)
   }
 
-  const currentPhoto = PHOTOS[currentIndex]
+  if (loading) {
+    return (
+      <div className="w-full h-48 rounded-2xl bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-sm text-gray-600 dark:text-gray-300">
+        Chargement des photos…
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="w-full h-48 rounded-2xl border border-dashed border-amber-200 dark:border-amber-800 flex items-center justify-center text-center px-3 text-sm text-amber-800 dark:text-amber-200">
+        {error}
+      </div>
+    )
+  }
+
+  if (len === 0) {
+    return (
+      <div className="w-full h-48 rounded-2xl border border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center text-center px-3 text-sm text-gray-500 dark:text-gray-400">
+        Aucune photo galerie pour le moment.
+      </div>
+    )
+  }
+
+  const currentPhoto = photos[currentIndex]
+  if (!currentPhoto) return null
 
   return (
     <div 
@@ -83,12 +94,11 @@ function PhotoCarousel() {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onClick={() => {
-        console.log('Clic sur le carrousel détecté')
-        router.push('/gallery')
+        router.push('/ressources?tab=galerie')
       }}
     >
       <img 
-        src={currentPhoto.src} 
+        src={currentPhoto.imageUrl} 
         alt="Paysage CEN Corse" 
         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 select-none pointer-events-none"
       />
@@ -124,7 +134,7 @@ function PhotoCarousel() {
       
       {/* Indicateurs de position */}
       <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1 pointer-events-none">
-        {PHOTOS.map((_, index) => (
+        {photos.map((_, index) => (
           <button
             key={index}
             onClick={(e) => {
@@ -177,16 +187,13 @@ export default function Presentation() {
   const [presentationData] = useState<PresentationData>({
     title: "Conservatoire d'espaces naturels de Corse",
     subtitle: "Protéger et valoriser le patrimoine naturel de la Corse",
-    description: " Le Conservatoire d'espaces naturels Corse (CEN Corse) est une association de loi 1901 à but non lucratif, agréée au titre de la protection de l'environnement. Créé en 1972 à l'initiative de naturalistes locaux, il œuvre pour préserver le patrimoine naturel et la biodiversité de l'île. Implanté à Borgo en Haute-Corse et à Ajaccio en Corse-du-Sud, le CEN Corse réunit une équipe de 16 salariés aux expertises variées : Suivis faunistiques, ornithologie, herpétologie, écologie terrestre, gestion de projets complexes, biostatistique, gestion et restauration d'espaces naturels, cartographie, et conception de projets de recherches expérimentaux (génétique, acoustique, écomorphologie, sanitaire, origine de mortalité, etc.). Cette diversité d'expertises rend l'équipe particulièrement polyvalente et capable de répondre efficacement à une large gamme d'enjeux environnementaux.",
+    description: " Le Conservatoire d'espaces naturels Corse (CEN Corse) est une association de loi 1901 à but non lucratif, agréée au titre de la protection de l'environnement. Créé en 1972 à l'initiative de naturalistes locaux, il œuvre pour préserver le patrimoine naturel et la biodiversité de l'île. Basé à Bastia, le CEN Corse réunit une équipe de plus de 15 salariés aux expertises variées : Suivis faunistiques, ornithologie, herpétologie, écologie terrestre, gestion de projets complexes, biostatistique, gestion et restauration d'espaces naturels, cartographie, et conception de projets de recherches expérimentaux (génétique, acoustique, écomorphologie, sanitaire, origine de mortalité, etc.). Cette diversité d'expertises rend l'équipe particulièrement polyvalente et capable de répondre efficacement à une large gamme d'enjeux environnementaux.",
 
-    addresses: [
-      "871, avenue de Borgo - 20290 Borgo",
-      "40 avenue Noël Franchini - 20090 Ajaccio"
-    ],
+    addresses: ['401 rue Jean Femenia, 20600 Bastia'],
     phone: "04 95 32 71 63",
     email: "contact@cen-corse.org",
     website: "www.cen-corse.org",
-    mainPhoto: "/photos_page_accueil/Plaine de Linguizzetta-2025-© Geyssels A..jpg",
+    mainPhoto: appStaticMediaUrl('photos_page_accueil/Plaine de Linguizzetta-2025-© Geyssels A..jpg'),
     employeeCount: 16,
     employees: [
       {
@@ -408,7 +415,7 @@ export default function Presentation() {
                 {showFullDescription && (
                   <>
                     <p className="mb-3">
-                      Implanté à Borgo en Haute-Corse et à Ajaccio en Corse-du-Sud, le CEN Corse réunit une équipe de 16 salariés aux expertises variées :
+                      Basé à Bastia, le CEN Corse intervient sur l&apos;ensemble de l&apos;île et réunit une équipe de plus de 15 salariés aux expertises variées :
                     </p>
                     
                     <ul className="mb-3 space-y-1">

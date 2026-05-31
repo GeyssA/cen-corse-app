@@ -1,5 +1,25 @@
 import type { NextConfig } from "next";
 
+/** Autoriser next/image sur les fichiers publics du Storage (médias migrés). */
+function supabaseStorageRemotePattern():
+  | { protocol: "https"; hostname: string; pathname: string }
+  | undefined {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!url) return undefined
+  try {
+    const { hostname } = new URL(url)
+    return {
+      protocol: "https",
+      hostname,
+      pathname: "/storage/v1/object/public/**",
+    }
+  } catch {
+    return undefined
+  }
+}
+
+const supabaseRemote = supabaseStorageRemotePattern()
+
 const nextConfig: NextConfig = {
   // Optimisations pour la production
   generateEtags: true,
@@ -158,6 +178,7 @@ const nextConfig: NextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+    ...(supabaseRemote ? { remotePatterns: [supabaseRemote] } : {}),
   },
   
   // Optimisations de performance et bundle
@@ -176,6 +197,7 @@ const nextConfig: NextConfig = {
     trailingSlash: true,
     images: {
       unoptimized: true, // Désactiver l'optimisation d'images pour l'export statique
+      ...(supabaseRemote ? { remotePatterns: [supabaseRemote] } : {}),
     },
     // Les routes API sont masquées par le script prepare-capacitor-build.js
   }),

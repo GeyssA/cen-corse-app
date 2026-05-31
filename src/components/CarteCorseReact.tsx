@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface ZoneInfo {
   id: string;
@@ -113,6 +114,7 @@ interface CarteCorseReactProps {
 
 export default function CarteCorseReact({ onRegionClick }: CarteCorseReactProps) {
   const router = useRouter();
+  const { theme } = useTheme();
 
   // Fonction pour gérer les clics sur les zones
   const handleZoneClick = (zoneName: string) => {
@@ -173,10 +175,12 @@ export default function CarteCorseReact({ onRegionClick }: CarteCorseReactProps)
         }
       `}</style>
       
-      <h2 className="text-center text-[1.2rem] font-serif font-semibold tracking-wider text-slate-100 drop-shadow mt-5 mb-3">
+      <h2 className={`text-center text-[1.2rem] font-serif font-semibold tracking-wider drop-shadow mt-2 mb-1 ${
+        theme === 'light' ? 'text-slate-900' : 'text-slate-100'
+      }`}>
         Découvrez les activités
       </h2>
-      <div className="w-full flex justify-center pt-4 pb-16">
+      <div className="w-full flex justify-center pt-2 pb-10">
         <div className="bg-slate-700/15 rounded-xl shadow-lg p-0 relative overflow-hidden">
           {/* Effet de particules d'étoiles filantes */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">

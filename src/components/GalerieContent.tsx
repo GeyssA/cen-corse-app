@@ -2,53 +2,11 @@
 
 import React, { useState, useCallback } from 'react'
 import { useTheme } from '@/contexts/ThemeContext'
-
-// Données de la galerie - version simplifiée comme avant
-const galeriePhotos = [
-  {
-    id: "1",
-    src: "/photos_page_accueil/Plaine de Linguizzetta-2025-© Geyssels A..jpg",
-    name: 'Plaine de Linguizzetta',
-    location: 'Plaine de Linguizzetta',
-    date: '2025',
-    author: '© Geyssels A.'
-  },
-  {
-    id: "2", 
-    src: "/photos_page_accueil/Col du Monaco-Pianottoli Caldarello-2024-© Geyssels A..jpg",
-    name: 'Col du Monaco',
-    location: 'Pianottoli Caldarello',
-    date: '2024',
-    author: '© Geyssels A.'
-  },
-  {
-    id: "3",
-    src: "/photos_page_accueil/Bufotes viridis balearicus-Lucciana-2011-© Hamoric N..jpg",
-    name: 'Bufotes viridis balearicus',
-    location: 'Lucciana',
-    date: '2011',
-    author: '© Hamoric N.'
-  },
-  {
-    id: "4",
-    src: "/photos_page_accueil/Bufotes viridis balericus-Boziu (1100 mètres d\'altitude)-2025-© Ertzscheid N..jpg",
-    name: 'Bufotes viridis balearicus',
-    location: 'Boziu (1100 m)',
-    date: '2025',
-    author: '© Ertzscheid N.'
-  },
-  {
-    id: "5",
-    src: "/photos_page_accueil/Amplexus de Bufotes viridis balericus-Boziu (1100 mètres d\'altitude)-2025-© Ertzscheid N..jpg",
-    name: 'Amplexus de Bufotes viridis balearicus',
-    location: 'Boziu (1100 m)',
-    date: '2025',
-    author: '© Ertzscheid N.'
-  }
-]
+import { useGaleriePhotos } from '@/hooks/useGaleriePhotos'
 
 export default function GalerieContent() {
   const { theme } = useTheme()
+  const { photos, loading, error } = useGaleriePhotos()
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [showInfoModal, setShowInfoModal] = useState(false)
 
@@ -65,44 +23,118 @@ export default function GalerieContent() {
   }, [])
 
   return (
-    <div className="space-y-6">
-      {/* Bouton élégant */}
-      <div className="text-center mb-4 mt-3">
-        <button
-          onClick={() => setShowInfoModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white text-sm font-medium rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+    <div className="space-y-4">
+      <section
+        className={`rounded-xl border px-3 py-2.5 sm:px-4 ${
+          theme === 'light'
+            ? 'border-emerald-200/50 bg-gradient-to-b from-white to-emerald-50/20'
+            : 'border-emerald-500/15 bg-gradient-to-b from-slate-900/90 to-emerald-950/15'
+        } `}
+      >
+        <p
+          className={`text-[9px] font-semibold uppercase tracking-widest ${
+            theme === 'light' ? 'text-emerald-800' : 'text-emerald-400/90'
+          }`}
         >
-          <span>En savoir plus sur les tirages</span>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </button>
-      </div>
+          Patrimoine & partage
+        </p>
+        <h2
+          className={`mt-0.5 font-serif text-base font-bold leading-tight sm:text-lg ${
+            theme === 'light' ? 'text-slate-900' : 'text-white'
+          }`}
+        >
+          Galerie photo
+        </h2>
+        <p
+          className={`mt-0.5 text-xs leading-snug ${
+            theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+          }`}
+        >
+          Photographies du territoire et de la biodiversité corse — auteurs indiqués sous chaque cliché.
+        </p>
+        <div className="mt-2 text-center sm:text-left">
+          <button
+            type="button"
+            onClick={() => setShowInfoModal(true)}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200 hover:opacity-95 ${
+              theme === 'light'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700'
+                : 'bg-gradient-to-r from-emerald-500/80 to-teal-600/80 text-white hover:from-emerald-500 hover:to-teal-500'
+            } `}
+          >
+            <span>En savoir plus sur les tirages</span>
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+        </div>
+      </section>
 
-      {/* Grille de photos - version verticale avec légendes */}
-      <div className="space-y-6">
-        {galeriePhotos.map((photo) => (
+      {error && (
+        <div
+          className={`rounded-lg border px-3 py-2 text-sm ${
+            theme === 'light'
+              ? 'bg-amber-50 border-amber-200 text-amber-900'
+              : 'bg-amber-950/40 border-amber-800/50 text-amber-100'
+          }`}
+          role="alert"
+        >
+          <p className="font-medium">Impossible de charger la galerie</p>
+          <p className="mt-1 opacity-90">{error}</p>
+        </div>
+      )}
+
+      {/* Grille de photos - version verticale avec légendes (données Supabase : table galerie_photos + bucket app-static) */}
+      {loading && (
+        <p className={`py-8 text-center ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
+          Chargement de la galerie…
+        </p>
+      )}
+
+      {!loading && !error && photos.length === 0 && (
+        <p className={`py-8 text-center text-sm ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
+          Aucune photo n’est publiée pour le moment. Ajoutez des entrées dans{' '}
+          <code className="rounded bg-black/10 px-1">galerie_photos</code> et les fichiers dans le stockage.
+        </p>
+      )}
+
+      <div className="space-y-3.5">
+        {photos.map((photo) => (
           <div
             key={photo.id}
-            className={`group cursor-pointer rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 ${
-              theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+            className={`group cursor-pointer overflow-hidden rounded-xl border shadow-sm transition-all duration-200 hover:shadow ${
+              theme === 'light' ? 'border-slate-200/80 bg-white' : 'border-white/10 bg-slate-900/40'
             }`}
-            onClick={() => handleImageClick(photo.src)}
+            onClick={() => handleImageClick(photo.imageUrl)}
           >
             <img
-              src={photo.src}
-              alt={photo.name}
-              className="w-full h-64 object-cover group-hover:scale-105 transition-transform duration-300"
+              src={photo.imageUrl}
+              alt={photo.title}
+              className="h-52 w-full object-cover transition-transform duration-200 group-hover:scale-[1.01]"
               loading="lazy"
             />
-            <div className="p-4">
-              <h3 className="font-semibold text-base mb-2 text-gray-900 dark:text-white">
-                {photo.name}
+            <div className="border-t border-slate-100/80 p-2.5 dark:border-white/5">
+              <h3
+                className={`mb-1 text-sm font-semibold leading-tight ${
+                  theme === 'light' ? 'text-slate-900' : 'text-white'
+                }`}
+              >
+                {photo.title}
               </h3>
-              <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
-                <p><strong>Lieu:</strong> {photo.location}</p>
-                <p><strong>Date:</strong> {photo.date}</p>
-                <p><strong>Auteur:</strong> {photo.author}</p>
+              <div
+                className={`space-y-0.5 text-[11px] leading-relaxed ${
+                  theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                }`}
+              >
+                <p>
+                  <strong>Lieu :</strong> {photo.location}
+                </p>
+                <p>
+                  <strong>Date :</strong> {photo.date}
+                </p>
+                <p>
+                  <strong>Auteur :</strong> {photo.author}
+                </p>
               </div>
             </div>
           </div>
@@ -133,44 +165,52 @@ export default function GalerieContent() {
 
       {/* Modal d'information - plein écran avec fond flouté */}
       {showInfoModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div 
-            className={`relative max-w-lg w-full rounded-2xl shadow-2xl p-8 border animate-in fade-in zoom-in duration-300 ${
-              theme === 'dark' 
-                ? 'bg-gray-800 border-gray-700' 
-                : 'bg-white border-gray-200'
-            }`}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div
+            className={`relative w-full max-w-lg animate-in rounded-2xl border p-8 shadow-2xl duration-300 ${
+              theme === 'dark'
+                ? 'border-white/10 bg-slate-900/95'
+                : 'border-slate-200/80 bg-white'
+            } `}
           >
             <button
+              type="button"
               onClick={closeInfoModal}
-              className="absolute top-3 right-3 w-6 h-6 rounded-full bg-gray-400 hover:bg-gray-500 text-white transition-all duration-200 flex items-center justify-center text-xs"
+              className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-slate-700 transition-colors hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
             >
               ✕
             </button>
             <div className="text-center">
-              <h3 className={`text-2xl font-bold mb-6 ${
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              }`}>
+              <h3
+                className={`mb-4 font-serif text-2xl font-bold ${
+                  theme === 'dark' ? 'text-white' : 'text-slate-900'
+                }`}
+              >
                 À propos de cette galerie
               </h3>
-              <p className={`text-base leading-relaxed mb-6 ${
-                theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-              }`}>
-                Le CEN Corse est ravi de partager avec vous cette sélection de photographies 
-                mettant en valeur la beauté de notre patrimoine naturel. Ces clichés sont 
-                l'œuvre de photographes passionnés et talentueux qui nous font l'honneur 
-                de collaborer avec nous.
+              <p
+                className={`mb-6 text-base leading-relaxed ${
+                  theme === 'dark' ? 'text-slate-300' : 'text-slate-600'
+                }`}
+              >
+                Le CEN Corse est ravi de partager avec vous cette sélection de photographies mettant en valeur
+                la beauté de notre patrimoine naturel. Ces clichés sont l&apos;œuvre de photographes passionnés
+                et talentueux qui nous font l&apos;honneur de collaborer avec nous.
               </p>
-              <div className={`p-4 rounded-xl ${
-                theme === 'dark' ? 'bg-gray-700' : 'bg-blue-50'
-              }`}>
-                <p className={`text-sm ${
-                  theme === 'dark' ? 'text-gray-300' : 'text-blue-700'
-                }`}>
-                  <strong>Vous avez un coup de cœur ?</strong><br />
-                  Avec l'accord des auteurs, nous pouvons vous proposer des tirages 
-                  ou des posters de qualité. N'hésitez pas à nous contacter pour 
-                  faire vivre vos moments préférés.
+              <div
+                className={`rounded-xl p-4 ${
+                  theme === 'dark' ? 'bg-emerald-950/40' : 'bg-emerald-50/90'
+                } `}
+              >
+                <p
+                  className={`text-sm ${
+                    theme === 'dark' ? 'text-emerald-200/90' : 'text-emerald-900'
+                  } `}
+                >
+                  <strong>Vous avez un coup de cœur ?</strong>
+                  <br />
+                  Avec l&apos;accord des auteurs, nous pouvons vous proposer des tirages ou des posters de qualité.
+                  N&apos;hésitez pas à nous contacter pour faire vivre vos moments préférés.
                 </p>
               </div>
             </div>

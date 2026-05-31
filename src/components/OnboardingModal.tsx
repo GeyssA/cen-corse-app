@@ -6,6 +6,10 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { updateProfile } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { getWelcomeFlowDoneKey } from '@/lib/app-onboarding'
+
+const THEME_PREF_PENDING_KEY = 'theme_pref_pending_after_onboarding'
+const THEME_PREF_REQUEST_EVENT = 'theme-preference-requested'
 
 interface OnboardingModalProps {
   isOpen: boolean
@@ -41,26 +45,15 @@ export default function OnboardingModal({ isOpen, onClose, userId }: OnboardingM
             <img src="/Logo_CENCorse.png" alt="CEN Corse" className="w-10/12 h-10/12 object-contain" style={{ display: 'block' }} />
           </div>
           <h2 className={`text-base font-bold mb-3 text-center ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>
-            Participez à la connaissance scientifique
+            Bienvenue sur l&apos;app du CEN Corse
           </h2>
           <div className={`text-sm leading-relaxed space-y-3 text-center mb-4 ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>
-            <p>Cette application permet de <strong>saisir des données naturalistes</strong> (observations, sites) et de <strong>contribuer à la connaissance de la biodiversité</strong>.</p>
-            <p>Vos données sont enregistrées dans la <strong>base du CEN Corse</strong> et remontent au <strong>niveau national</strong> avec votre nom en tant qu’observateur, dans le respect des cadres de diffusion des données.</p>
-            <p>Chaque observation compte pour la science et la préservation des espèces.</p>
-          </div>
-        </div>
-      )
-    },
-    {
-      title: "Découvrir l'application",
-      content: (
-        <div className="flex flex-col items-center justify-center space-y-1">
-          <h2 className={`text-base font-bold mb-3 text-center ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>
-            Bienvenue sur l’application du CEN Corse
-          </h2>
-          <div className={`text-sm leading-relaxed space-y-3 text-center mb-4 ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>
-            <p>Vous pourrez consulter les <strong>projets et études</strong> en cours, les <strong>activités</strong> proposées par l’association, découvrir l’<strong>équipe</strong> du CEN Corse, accéder à la <strong>galerie photo</strong> et aux supports d’information.</p>
-            <p>Depuis l’accueil : <strong>ajoutez des observations</strong> et des <strong>sites</strong>, consultez la carte, exportez vos données. Profitez-en !</p>
+            <p>
+              En collectant vos observations et vos sites, vous participez directement à la connaissance de la biodiversité en Corse.
+            </p>
+            <p>
+              Vous retrouverez aussi les activités du CEN Corse, les ressources numériques, les photos, ainsi que la présentation de l&apos;association.
+            </p>
           </div>
         </div>
       )
@@ -156,10 +149,13 @@ export default function OnboardingModal({ isOpen, onClose, userId }: OnboardingM
       await supabase.auth.updateUser({ data: { full_name: trimmed } })
       await updateUserProfile()
       if (effectiveUserId) {
+        localStorage.setItem(getWelcomeFlowDoneKey(effectiveUserId), '1')
         localStorage.setItem(`hasSeenOnboarding_${effectiveUserId}`, 'true')
       } else {
         localStorage.setItem('hasSeenOnboarding', 'true')
       }
+      localStorage.setItem(THEME_PREF_PENDING_KEY, '1')
+      window.dispatchEvent(new CustomEvent(THEME_PREF_REQUEST_EVENT))
       onClose()
     } catch (err) {
       setNameError(err instanceof Error ? err.message : 'Erreur lors de l\'enregistrement.')
@@ -181,13 +177,11 @@ export default function OnboardingModal({ isOpen, onClose, userId }: OnboardingM
       {/* Modal overlay - fond semi-transparent */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         {/* Fond semi-transparent */}
-        <div 
+        <div
           className={`absolute inset-0 ${
-            theme === 'light' 
-              ? 'bg-black/30 backdrop-blur-sm' 
-              : 'bg-black/50 backdrop-blur-sm'
-          }`} 
-          onClick={onClose}
+            theme === 'light' ? 'bg-black/30 backdrop-blur-sm' : 'bg-black/50 backdrop-blur-sm'
+          }`}
+          aria-hidden
         />
         
         {/* Modal content */}

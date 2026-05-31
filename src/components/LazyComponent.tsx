@@ -62,12 +62,8 @@ export function LazyComponent<T extends ComponentType<any>>({
 }
 
 // Composants lazy prédéfinis pour les pages principales
-export const LazyProjetsContent = lazy(() => import('@/app/projets/ProjetsContent'))
-export const LazyStatistiquesContent = lazy(() => import('@/app/projets/StatistiquesContent'))
-export const LazyStatsContent = lazy(() => import('@/app/projets/StatsContent'))
 export const LazyCommunauteActivitesContent = lazy(() => import('@/app/communaute/ActivitesContent'))
 export const LazyCommunauteCalendrierContent = lazy(() => import('@/app/communaute/CommunauteCalendrierContent'))
-export const LazyAddProjectModal = lazy(() => import('@/components/modals/AddProjectModal'))
 export const LazyAddActivityModal = lazy(() => import('@/components/modals/AddActivityModal'))
 export const LazyOnboardingModal = lazy(() => import('@/components/OnboardingModal'))
 export const LazyPWAInstallPrompt = lazy(() => import('@/components/PWAInstallPrompt'))

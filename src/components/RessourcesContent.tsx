@@ -2,84 +2,111 @@
 
 import React, { useState, useEffect, memo, useMemo, useCallback } from 'react'
 import { useTheme } from '@/contexts/ThemeContext'
+import {
+  fetchPublishedNumericalSupports,
+  type ImageSlot,
+  type NumericalSupport
+} from '@/lib/ressourcesNumeriques'
+import { appStaticMediaUrl } from '@/lib/app-static-media'
 
-interface Support {
-  id: string
-  title: string
-  description: string
-  coverImage: string
-  images: string[]
-  pdfUrl?: string
-  category: string
+async function openSupportUrl(url: string) {
+  try {
+    const { Capacitor } = await import('@capacitor/core')
+    if (Capacitor.isNativePlatform()) {
+      const { Browser } = await import('@capacitor/browser')
+      await Browser.open({ url })
+      return
+    }
+  } catch {
+    // fallback web
+  }
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
-// Données des supports d'informations organisées par catégories
-const supportsData: Support[] = [
-  {
-    id: "1",
-    title: "REVUE ESPÈCES : L'origine du Crapaud Vert en Corse",
-    description: "Découvrez l'histoire fascinante du Crapaud Vert (Bufotes viridis balearicus) et son origine en Corse à travers cette article détaillé.",
-    coverImage: "/Nos fascicules/REVUE BVI PAGE 1.png",
-    images: [
-      "/Nos fascicules/REVUE BVI PAGE 1.png",
-      "/Nos fascicules/REVUE BVI PAGE 2.png",
-      "/Nos fascicules/REVUE BVI PAGE 3.png"
-    ],
-    category: "Herpétologie"
-  },
-  {
-    id: "2",
-    title: "La Buglosse crépue (Anchusa crispa) - Espèce de la flore insulaire corse",
-    description: "Découvrez cette espèce endémique de la flore corse : description, habitat, menaces et bons gestes pour sa préservation.",
-    coverImage: "/Nos fascicules/Anchusa_crispa_fleur.jpg",
-    images: [
-      "/Nos fascicules/PAGE 1_recto_GP_AC.png",
-      "/Nos fascicules/PAGE 2_verso_GP_AC.png"
-    ],
-    category: "Flore"
-  },
-  {
-    id: "3",
-    title: "Les Statices de Corse (Limonium sp.) - Espèces menacées de la flore insulaire",
-    description: "Découvrez ces espèces menacées de la flore insulaire corse qui font l'objet d'un Plan National d'Action (PNA) : description, habitat, menaces et actions de conservation.",
-    coverImage: "/Nos fascicules/photo_limonium.jpg",
-    images: [
-      "/Nos fascicules/PAGE 1_LIMONIUM.png",
-      "/Nos fascicules/PAGE 2_LIMONIUM.png"
-    ],
-    category: "Flore"
-  },
-  {
-    id: "4",
-    title: "Le Silène velouté (Silene velutina) - Espèce de la flore insulaire corse",
-    description: "Découvrez cette espèce endémique de la flore corse : description, habitat, menaces et bons gestes pour sa préservation.",
-    coverImage: "/Nos fascicules/SILENE VELOUTE.jpg",
-    images: [
-      "/Nos fascicules/PAGE1-SILENE-VELOUTE (1).png",
-      "/Nos fascicules/PAGE2-SILENE-VELOUTE (2).png"
-    ],
-    category: "Flore"
-  },
-  {
-    id: "5",
-    title: "RAPPORT D'ACTIVITÉ 2024",
-    description: "Découvrez les activités et réalisations du CEN Corse en 2024 : projets, études, actions de conservation et perspectives d'avenir.",
-    coverImage: "",
-    images: [],
-    pdfUrl: "/Rapport d'activité 2024_compressed.pdf",
-    category: "Fascicule CEN"
+async function downloadSupportFile(url: string, filename: string) {
+  if ((await import('@capacitor/core')).Capacitor.isNativePlatform()) {
+    // Sur WebView Android, le download direct peut être bloqué : ouvrir la ressource dans le navigateur natif.
+    await openSupportUrl(url)
+    return
   }
-]
+  try {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const blob = await response.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1500)
+  } catch {
+    await openSupportUrl(url)
+  }
+}
+
+function getFileNameFromUrl(url: string, fallback: string): string {
+  try {
+    const parsed = new URL(url)
+    const raw = parsed.pathname.split('/').pop() || fallback
+    return decodeURIComponent(raw)
+  } catch {
+    return fallback
+  }
+}
+
+async function downloadSupportImagesZip(title: string, images: string[]) {
+  const JSZip = (await import('jszip')).default
+  const zip = new JSZip()
+  for (let idx = 0; idx < images.length; idx++) {
+    const img = images[idx]
+    const response = await fetch(img)
+    if (!response.ok) continue
+    const blob = await response.blob()
+    const ext = (img.split('.').pop() || 'jpg').split('?')[0]
+    zip.file(`page_${idx + 1}.${ext}`, blob)
+  }
+  const zipBlob = await zip.generateAsync({ type: 'blob' })
+  const safeTitle = title.replace(/[^a-z0-9]/gi, '_').slice(0, 60) || 'ressource'
+  if ((await import('@capacitor/core')).Capacitor.isNativePlatform()) {
+    try {
+      const file = new File([zipBlob], `${safeTitle}.zip`, { type: 'application/zip' })
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: `${safeTitle}.zip` })
+        return
+      }
+    } catch {
+      // fallback anchor
+    }
+  }
+  const objectUrl = URL.createObjectURL(zipBlob)
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = `${safeTitle}.zip`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1500)
+}
 
 // Composant pour afficher un support - Design simple et efficace
 const SupportCard = memo(function SupportCard({ 
   support, 
   onClick 
 }: { 
-  support: Support
-  onClick: (support: Support) => void 
+  support: NumericalSupport
+  onClick: (support: NumericalSupport) => void 
 }) {
   const { theme } = useTheme()
+  const [descExpanded, setDescExpanded] = useState(false)
+
+  useEffect(() => {
+    setDescExpanded(false)
+  }, [support.id])
+
+  const desc = (support.description ?? '').trim()
+  const showDescToggle = desc.length > 120
 
   const handleViewClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -89,110 +116,105 @@ const SupportCard = memo(function SupportCard({
   // Design compact pour les PDFs sans image de couverture
   if (!support.coverImage) {
     return (
-      <div 
-        className={`group relative rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden ${
-          theme === 'light' 
-            ? 'bg-white border border-gray-200' 
-            : 'bg-gray-800/80 backdrop-blur-sm'
-        } p-4`}
+      <div
+        className={`group relative overflow-hidden rounded-xl border p-3 shadow-sm transition-all duration-300 hover:shadow-md ${
+          theme === 'light'
+            ? 'border-slate-200/80 bg-white/95'
+            : 'border-white/10 bg-white/[0.05]'
+        } `}
       >
-        {/* Badge catégorie */}
-        <span className={`inline-block px-2 py-1 text-xs font-medium rounded-md mb-2 ${
-          theme === 'light' 
-            ? 'bg-gray-100 text-gray-600' 
-            : 'bg-gray-700 text-gray-300'
-        }`}>
+        <span
+          className={`mb-1.5 inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${
+            theme === 'light' ? 'bg-emerald-50 text-emerald-800' : 'bg-emerald-500/15 text-emerald-200'
+          }`}
+        >
           {support.category}
         </span>
-        
-        {/* Titre */}
-        <h3 className={`text-sm font-medium mb-3 ${
-          theme === 'light' ? 'text-gray-900' : 'text-gray-200'
-        }`}>
+
+        <h3
+          className={`mb-1.5 break-words text-sm font-medium leading-snug ${
+            theme === 'light' ? 'text-slate-900' : 'text-slate-100'
+          }`}
+        >
           {support.title}
         </h3>
-        
-        {/* Description complète sans troncature */}
-        <p className={`text-xs leading-relaxed mb-3 ${
-          theme === 'light' ? 'text-gray-700' : 'text-gray-400'
-        }`}>
-          {support.description}
-        </p>
-         
-        {/* Boutons de même taille */}
+
+        {desc && (
+          <div className="mb-2.5">
+            <p
+              className={`whitespace-pre-wrap text-xs leading-relaxed ${
+                !descExpanded && showDescToggle ? 'line-clamp-3' : ''
+              } ${
+                theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+              } `}
+            >
+              {desc}
+            </p>
+            {showDescToggle && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDescExpanded((v) => !v)
+                }}
+                className={`mt-1 text-left text-[11px] font-semibold ${
+                  theme === 'light'
+                    ? 'text-emerald-700 hover:text-emerald-800'
+                    : 'text-emerald-400/90 hover:text-emerald-300'
+                } `}
+              >
+                {descExpanded ? 'Réduire' : 'Lire la suite'}
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="flex gap-2">
           <button
             onClick={handleViewClick}
-            className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+            className={`flex-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
               theme === 'light'
-                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                ? 'bg-slate-100 text-slate-800 hover:bg-slate-200/90'
+                : 'bg-slate-700/80 text-slate-200 hover:bg-slate-600'
             }`}
           >
             Voir
           </button>
-          
+
           {support.pdfUrl ? (
-            <a
-              href={support.pdfUrl}
-              download
-              onClick={(e) => e.stopPropagation()}
-              className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-center ${
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                void downloadSupportFile(
+                  support.pdfUrl!,
+                  getFileNameFromUrl(support.pdfUrl!, `${support.title}.pdf`)
+                )
+              }}
+              className={`flex-1 rounded-lg px-2.5 py-1.5 text-center text-xs font-medium transition-colors ${
                 theme === 'light'
-                  ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                  : 'bg-blue-900/50 text-blue-300 hover:bg-blue-800/50'
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'bg-emerald-500/25 text-emerald-200 hover:bg-emerald-500/35'
               }`}
             >
               Télécharger
-            </a>
+            </button>
           ) : support.images.length > 0 && (
             <button
               onClick={async (e) => {
                 e.preventDefault()
                 e.stopPropagation()
-                
-                // Créer un ZIP avec toutes les images
                 try {
-                  const JSZip = (await import('jszip')).default
-                  const zip = new JSZip()
-                  
-                  // Ajouter chaque image au ZIP
-                  for (let idx = 0; idx < support.images.length; idx++) {
-                    const img = support.images[idx]
-                    const response = await fetch(img)
-                    const blob = await response.blob()
-                    const fileName = `page_${idx + 1}.${img.split('.').pop()}`
-                    zip.file(fileName, blob)
-                  }
-                  
-                  // Générer et télécharger le ZIP
-                  const zipBlob = await zip.generateAsync({ type: 'blob' })
-                  const link = document.createElement('a')
-                  link.href = URL.createObjectURL(zipBlob)
-                  link.download = `${support.title.replace(/[^a-z0-9]/gi, '_')}.zip`
-                  document.body.appendChild(link)
-                  link.click()
-                  document.body.removeChild(link)
-                  URL.revokeObjectURL(link.href)
-                } catch (error) {
-                  console.error('Erreur lors de la création du ZIP:', error)
-                  // Fallback: téléchargement séquentiel
-                  support.images.forEach((img, idx) => {
-                    setTimeout(() => {
-                      const link = document.createElement('a')
-                      link.href = img
-                      link.download = `${support.title.replace(/[^a-z0-9]/gi, '_')}_page_${idx + 1}`
-                      document.body.appendChild(link)
-                      link.click()
-                      document.body.removeChild(link)
-                    }, idx * 500)
-                  })
+                  await downloadSupportImagesZip(support.title, support.images)
+                } catch {
+                  if (support.images[0]) await openSupportUrl(support.images[0])
                 }
               }}
-              className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-center ${
+              className={`flex-1 rounded-lg px-2.5 py-1.5 text-center text-xs font-medium transition-colors ${
                 theme === 'light'
-                  ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                  : 'bg-blue-900/50 text-blue-300 hover:bg-blue-800/50'
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'bg-emerald-500/25 text-emerald-200 hover:bg-emerald-500/35'
               }`}
             >
               Télécharger
@@ -205,11 +227,13 @@ const SupportCard = memo(function SupportCard({
 
   // Design standard avec image pour les autres supports
   return (
-    <div 
-      className={`group relative rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden`}
+    <div
+      className={`group relative overflow-hidden rounded-xl border shadow-sm transition-all duration-300 hover:shadow-md ${
+        theme === 'light' ? 'border-slate-200/80 bg-white' : 'border-white/10 bg-slate-900/40'
+      }`}
     >
       {/* Photo visible */}
-      <div className="relative h-48 overflow-hidden">
+      <div className="relative h-40 overflow-hidden">
         <img
           src={support.coverImage}
           alt={support.title}
@@ -218,132 +242,167 @@ const SupportCard = memo(function SupportCard({
         />
         
         {/* Badge catégorie discret */}
-        <div className="absolute top-3 left-3">
-          <span className={`px-2 py-1 text-xs font-medium rounded-md backdrop-blur-sm ${
-            theme === 'light' 
-              ? 'bg-white/80 text-gray-600' 
-              : 'bg-gray-800/80 text-gray-300'
-          }`}>
+        <div className="absolute left-3 top-3">
+          <span
+            className={`rounded-md px-2 py-1 text-xs font-medium backdrop-blur-sm ${
+              theme === 'light' ? 'bg-white/90 text-slate-700' : 'bg-slate-900/75 text-slate-200'
+            }`}
+          >
             {support.category}
           </span>
         </div>
       </div>
 
-      {/* Contenu discret */}
-       <div className={`p-4 ${
-         theme === 'light' 
-           ? 'bg-white border-t border-gray-200' 
-           : 'bg-gray-800/80 backdrop-blur-sm'
-       }`}>
-        <h3 className={`text-sm font-medium mb-2 line-clamp-2 ${
-          theme === 'light' ? 'text-gray-900' : 'text-gray-200'
-         }`}>
-           {support.title}
-         </h3>
-        
-        <p className={`text-xs leading-relaxed mb-4 line-clamp-3 ${
-          theme === 'light' ? 'text-gray-700' : 'text-gray-400'
-         }`}>
-           {support.description}
-         </p>
-         
-        {/* Boutons de même taille */}
-         <div className="flex gap-2">
-           <button
+      <div
+        className={`border-t p-3 ${
+          theme === 'light' ? 'border-slate-100 bg-white' : 'border-white/5 bg-slate-900/50'
+        }`}
+      >
+        <h3
+          className={`mb-1.5 text-sm font-medium leading-snug break-words ${
+            theme === 'light' ? 'text-slate-900' : 'text-slate-100'
+          }`}
+        >
+          {support.title}
+        </h3>
+
+        {desc && (
+          <div className="mb-2.5">
+            <p
+              className={`whitespace-pre-wrap text-xs leading-relaxed ${
+                !descExpanded && showDescToggle ? 'line-clamp-3' : ''
+              } ${
+                theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+              } `}
+            >
+              {desc}
+            </p>
+            {showDescToggle && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDescExpanded((v) => !v)
+                }}
+                className={`mt-1 text-left text-[11px] font-semibold ${
+                  theme === 'light'
+                    ? 'text-emerald-700 hover:text-emerald-800'
+                    : 'text-emerald-400/90 hover:text-emerald-300'
+                } `}
+              >
+                {descExpanded ? 'Réduire' : 'Lire la suite'}
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <button
             onClick={handleViewClick}
-            className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-               theme === 'light'
-                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-             }`}
-           >
+            className={`flex-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+              theme === 'light'
+                ? 'bg-slate-100 text-slate-800 hover:bg-slate-200/90'
+                : 'bg-slate-700/80 text-slate-200 hover:bg-slate-600'
+            }`}
+          >
             Voir
-           </button>
-          
-           {support.pdfUrl ? (
-             <a
-               href={support.pdfUrl}
-               download
-               onClick={(e) => e.stopPropagation()}
-              className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-center ${
-                 theme === 'light'
-                  ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                  : 'bg-blue-900/50 text-blue-300 hover:bg-blue-800/50'
-               }`}
-             >
+          </button>
+
+          {support.pdfUrl ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                void downloadSupportFile(
+                  support.pdfUrl!,
+                  getFileNameFromUrl(support.pdfUrl!, `${support.title}.pdf`)
+                )
+              }}
+              className={`flex-1 rounded-lg px-2.5 py-1.5 text-center text-xs font-medium transition-colors ${
+                theme === 'light'
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'bg-emerald-500/25 text-emerald-200 hover:bg-emerald-500/35'
+              }`}
+            >
               Télécharger
-             </a>
-           ) : support.images.length > 0 && (
-             <button
-               onClick={async (e) => {
+            </button>
+          ) : support.images.length > 0 && (
+            <button
+              onClick={async (e) => {
                  e.preventDefault()
                  e.stopPropagation()
-                 
-                 // Créer un ZIP avec toutes les images
                  try {
-                   const JSZip = (await import('jszip')).default
-                   const zip = new JSZip()
-                   
-                   // Ajouter chaque image au ZIP
-                   for (let idx = 0; idx < support.images.length; idx++) {
-                     const img = support.images[idx]
-                     const response = await fetch(img)
-                     const blob = await response.blob()
-                     const fileName = `page_${idx + 1}.${img.split('.').pop()}`
-                     zip.file(fileName, blob)
-                   }
-                   
-                   // Générer et télécharger le ZIP
-                   const zipBlob = await zip.generateAsync({ type: 'blob' })
-                   const link = document.createElement('a')
-                   link.href = URL.createObjectURL(zipBlob)
-                   link.download = `${support.title.replace(/[^a-z0-9]/gi, '_')}.zip`
-                   document.body.appendChild(link)
-                   link.click()
-                   document.body.removeChild(link)
-                   URL.revokeObjectURL(link.href)
-                 } catch (error) {
-                   console.error('Erreur lors de la création du ZIP:', error)
-                   // Fallback: téléchargement séquentiel
-                   support.images.forEach((img, idx) => {
-                     setTimeout(() => {
-                       const link = document.createElement('a')
-                       link.href = img
-                       link.download = `${support.title.replace(/[^a-z0-9]/gi, '_')}_page_${idx + 1}`
-                       document.body.appendChild(link)
-                       link.click()
-                       document.body.removeChild(link)
-                     }, idx * 500)
-                   })
+                   await downloadSupportImagesZip(support.title, support.images)
+                 } catch {
+                   if (support.images[0]) await openSupportUrl(support.images[0])
                  }
                }}
-              className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-center ${
-                 theme === 'light'
-                  ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                  : 'bg-blue-900/50 text-blue-300 hover:bg-blue-800/50'
-               }`}
-             >
+              className={`flex-1 rounded-lg px-2.5 py-1.5 text-center text-xs font-medium transition-colors ${
+                theme === 'light'
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'bg-emerald-500/25 text-emerald-200 hover:bg-emerald-500/35'
+              }`}
+            >
               Télécharger
-             </button>
-           )}
-         </div>
-       </div>
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 })
 
 // Modal plein écran avec zoom et pan (style Messenger)
+function renderImageSlot(slot: ImageSlot, title: string, slotIndex: number) {
+  if (slot.type === 'single') {
+    return (
+      <img
+        src={slot.url}
+        alt={`${title} — ${slotIndex + 1}`}
+        className="max-h-[88vh] w-auto max-w-full object-contain select-none"
+        draggable={false}
+      />
+    )
+  }
+  return (
+    <div className="flex w-full max-w-5xl flex-col items-stretch justify-center gap-3 px-2 sm:flex-row sm:gap-5">
+      <figure className="flex min-w-0 flex-1 flex-col items-center">
+        <figcaption className="mb-1 text-[11px] font-medium uppercase tracking-wide text-white/65">
+          Recto
+        </figcaption>
+        <img
+          src={slot.recto}
+          alt={`${title} — recto`}
+          className="max-h-[42vh] w-auto max-w-full object-contain select-none sm:max-h-[78vh]"
+          draggable={false}
+        />
+      </figure>
+      <figure className="flex min-w-0 flex-1 flex-col items-center">
+        <figcaption className="mb-1 text-[11px] font-medium uppercase tracking-wide text-white/65">
+          Verso
+        </figcaption>
+        <img
+          src={slot.verso}
+          alt={`${title} — verso`}
+          className="max-h-[42vh] w-auto max-w-full object-contain select-none sm:max-h-[78vh]"
+          draggable={false}
+        />
+      </figure>
+    </div>
+  )
+}
+
 const SupportModal = memo(function SupportModal({ 
   support, 
   isOpen, 
   onClose 
 }: { 
-  support: Support | null
+  support: NumericalSupport | null
   isOpen: boolean
   onClose: () => void 
 }) {
-  const { theme } = useTheme()
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [currentSlotIndex, setCurrentSlotIndex] = useState(0)
   const [touchStart, setTouchStart] = useState<number | null>(null)
   const [touchEnd, setTouchEnd] = useState<number | null>(null)
   const [scale, setScale] = useState(1)
@@ -359,18 +418,18 @@ const SupportModal = memo(function SupportModal({
   }, [])
 
   const handlePrevImage = useCallback(() => {
-    if (support?.images && support.images.length > 0) {
-      setCurrentImageIndex((prev) => 
-        prev === 0 ? support.images.length - 1 : prev - 1
+    if (support?.slots && support.slots.length > 0) {
+      setCurrentSlotIndex((prev) =>
+        prev === 0 ? support.slots.length - 1 : prev - 1
       )
       resetZoom()
     }
   }, [support, resetZoom])
 
   const handleNextImage = useCallback(() => {
-    if (support?.images && support.images.length > 0) {
-      setCurrentImageIndex((prev) => 
-        prev === support.images.length - 1 ? 0 : prev + 1
+    if (support?.slots && support.slots.length > 0) {
+      setCurrentSlotIndex((prev) =>
+        prev === support.slots.length - 1 ? 0 : prev + 1
       )
       resetZoom()
     }
@@ -440,6 +499,13 @@ const SupportModal = memo(function SupportModal({
     setLastTouchDistance(null)
   }, [])
 
+  useEffect(() => {
+    if (!isOpen || !support) return
+    setCurrentSlotIndex(0)
+    setScale(1)
+    setPosition({ x: 0, y: 0 })
+  }, [isOpen, support?.id])
+
   // Double-tap pour zoomer/dézoomer
   const [lastTap, setLastTap] = useState(0)
   const handleDoubleTap = useCallback(() => {
@@ -498,6 +564,12 @@ const SupportModal = memo(function SupportModal({
   }, [isOpen, handlePrevImage, handleNextImage, onClose])
 
   if (!isOpen || !support) return null
+  const currentSlot = support.slots?.[currentSlotIndex]
+  const currentSlotUrls = currentSlot
+    ? currentSlot.type === 'single'
+      ? [currentSlot.url]
+      : [currentSlot.recto, currentSlot.verso]
+    : []
 
   const topSafe = 'max(1rem, env(safe-area-inset-top, 0px))'
   const bottomSafe = 'max(1rem, env(safe-area-inset-bottom, 0px))'
@@ -516,6 +588,28 @@ const SupportModal = memo(function SupportModal({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
+      {currentSlotUrls.length > 0 && (
+        <button
+          onClick={async () => {
+            if (currentSlotUrls.length === 1) {
+              await downloadSupportFile(
+                currentSlotUrls[0],
+                getFileNameFromUrl(currentSlotUrls[0], `${support.title}.jpg`)
+              )
+              return
+            }
+            await downloadSupportImagesZip(support.title, currentSlotUrls)
+          }}
+          className="absolute z-20 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors"
+          style={{ top: topSafe, right: `calc(${rightSafe} + 3rem)` }}
+          title="Télécharger"
+          aria-label="Télécharger"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+          </svg>
+        </button>
+      )}
 
       {/* Indicateur de zoom */}
       {scale > 1 && (
@@ -565,7 +659,7 @@ const SupportModal = memo(function SupportModal({
       </div>
 
       {/* Navigation gauche */}
-      {support.images && support.images.length > 1 && (
+      {support.slots && support.slots.length > 1 && (
         <button
           onClick={handlePrevImage}
           className="absolute top-1/2 transform -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors"
@@ -578,7 +672,7 @@ const SupportModal = memo(function SupportModal({
       )}
 
       {/* Navigation droite */}
-      {support.images && support.images.length > 1 && (
+      {support.slots && support.slots.length > 1 && (
         <button
           onClick={handleNextImage}
           className="absolute top-1/2 transform -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors"
@@ -601,7 +695,7 @@ const SupportModal = memo(function SupportModal({
         onTouchStart={(e) => {
           handleTouchStartZoom(e)
           handleTouchStart(e)
-          handleDoubleTap()
+          if (e.touches.length === 1) handleDoubleTap()
         }}
         onTouchMove={(e) => {
           handleTouchMoveZoom(e)
@@ -613,17 +707,16 @@ const SupportModal = memo(function SupportModal({
         }}
         style={{ cursor: scale > 1 ? 'move' : 'default' }}
       >
-        {support.images && support.images.length > 0 ? (
-          <img
-            src={support.images[currentImageIndex]}
-            alt={`${support.title} - Page ${currentImageIndex + 1}`}
-            className="max-w-full max-h-screen object-contain select-none"
+        {support.slots && support.slots.length > 0 ? (
+          <div
+            className="flex max-h-full max-w-full items-center justify-center"
             style={{
               transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
               transition: isDragging ? 'none' : 'transform 0.1s ease-out'
             }}
-            draggable={false}
-          />
+          >
+            {renderImageSlot(support.slots[currentSlotIndex], support.title, currentSlotIndex)}
+          </div>
         ) : support.pdfUrl ? (
           <iframe
             src={support.pdfUrl}
@@ -638,15 +731,19 @@ const SupportModal = memo(function SupportModal({
         ) : null}
       </div>
               
-      {/* Indicateurs de pages */}
-      {support.images && support.images.length > 1 && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
-                  {support.images.map((_, index) => (
+      {/* Indicateurs de pages / planches */}
+      {support.slots && support.slots.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 transform space-x-2">
+                  {support.slots.map((_, index) => (
                     <button
                       key={index}
-                      onClick={() => setCurrentImageIndex(index)}
-              className={`w-2 h-2 rounded-full transition-colors ${
-                        index === currentImageIndex
+                      type="button"
+                      onClick={() => {
+                        setCurrentSlotIndex(index)
+                        resetZoom()
+                      }}
+              className={`h-2 w-2 rounded-full transition-colors ${
+                        index === currentSlotIndex
                   ? 'bg-white'
                   : 'bg-white/50'
                       }`}
@@ -655,10 +752,10 @@ const SupportModal = memo(function SupportModal({
             </div>
           )}
 
-      {/* Compteur de pages */}
-      {support.images && support.images.length > 1 && (
+      {/* Compteur : une planche = un slot (recto+verso = 1) */}
+      {support.slots && support.slots.length > 1 && (
         <div className="absolute right-4 text-white text-sm bg-black/50 px-3 py-1 rounded-full" style={{ bottom: bottomSafe }}>
-          {currentImageIndex + 1} / {support.images.length}
+          {currentSlotIndex + 1} / {support.slots.length}
         </div>
       )}
     </div>
@@ -668,10 +765,28 @@ const SupportModal = memo(function SupportModal({
 // Composant principal
 const RessourcesContent = memo(function RessourcesContent() {
   const { theme } = useTheme()
-  const [selectedSupport, setSelectedSupport] = useState<Support | null>(null)
+  const [supports, setSupports] = useState<NumericalSupport[]>([])
+  const [supportsLoading, setSupportsLoading] = useState(true)
+  const [supportsError, setSupportsError] = useState<string | null>(null)
+  const [selectedSupport, setSelectedSupport] = useState<NumericalSupport | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('Fascicule CEN')
+
+  useEffect(() => {
+    let cancelled = false
+    setSupportsLoading(true)
+    setSupportsError(null)
+    fetchPublishedNumericalSupports().then(({ data, error }) => {
+      if (cancelled) return
+      setSupportsLoading(false)
+      if (error) setSupportsError(error)
+      setSupports(data)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Onglets thématiques élégants avec émojis et logo
   const thematicTabs = useMemo(() => [
@@ -679,10 +794,10 @@ const RessourcesContent = memo(function RessourcesContent() {
       id: 'fascicules-cen',
       name: 'Fascicule CEN',
       icon: (
-        <img 
-          src="/Nos fascicules/small_cen-removebg-preview.png" 
-          alt="CEN Corse" 
-          className="w-6 h-6 object-contain"
+        <img
+          src={appStaticMediaUrl('Nos fascicules/small_cen-removebg-preview.png')}
+          alt="CEN Corse"
+          className="h-7 w-7 object-contain"
         />
       ),
       gradient: 'from-blue-500 to-blue-600',
@@ -703,32 +818,45 @@ const RessourcesContent = memo(function RessourcesContent() {
       hoverGradient: 'from-purple-600 to-purple-700'
     },
     {
-      id: 'eau',
-      name: 'Eau',
-      icon: '💧',
-      gradient: 'from-cyan-500 to-cyan-600',
-      hoverGradient: 'from-cyan-600 to-cyan-700'
-    },
-    {
       id: 'flore',
       name: 'Flore',
       icon: '🌺',
       gradient: 'from-pink-500 to-pink-600',
       hoverGradient: 'from-pink-600 to-pink-700'
+    },
+    {
+      id: 'publications',
+      name: 'Publications',
+      icon: (
+        <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.75}
+            d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0118 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"
+          />
+        </svg>
+      ),
+      gradient: 'from-indigo-500 to-violet-600',
+      hoverGradient: 'from-indigo-600 to-violet-700'
     }
   ], [])
 
   // Filtrage des supports
   const filteredSupports = useMemo(() => {
-    return supportsData.filter(support => {
+    return supports.filter((support) => {
       const matchesSearch = support.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            support.description.toLowerCase().includes(searchTerm.toLowerCase())
       const matchesCategory = support.category === selectedCategory
       return matchesSearch && matchesCategory
     })
-  }, [searchTerm, selectedCategory])
+  }, [supports, searchTerm, selectedCategory])
 
-  const handleSupportClick = useCallback((support: Support) => {
+  const handleSupportClick = useCallback((support: NumericalSupport) => {
+    if ((!support.slots || support.slots.length === 0) && support.pdfUrl) {
+      void openSupportUrl(support.pdfUrl)
+      return
+    }
     setSelectedSupport(support)
     setIsModalOpen(true)
   }, [])
@@ -740,56 +868,119 @@ const RessourcesContent = memo(function RessourcesContent() {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-7xl mx-auto px-3 py-1">
-        {/* Onglets thématiques élégants - une seule ligne avec symboles uniquement */}
-        <div className="mb-8">
-          <div className="flex justify-center gap-4">
-            {thematicTabs.map(tab => (
+      <div className="mx-auto max-w-3xl px-1 py-1">
+        <section
+          className={`mb-3 rounded-xl border px-3 py-2.5 sm:px-4 ${
+            theme === 'light'
+              ? 'border-emerald-200/50 bg-gradient-to-b from-white to-emerald-50/20'
+              : 'border-emerald-500/15 bg-gradient-to-b from-slate-900/90 to-emerald-950/15'
+          } `}
+        >
+          <p
+            className={`text-[9px] font-semibold uppercase tracking-widest ${
+              theme === 'light' ? 'text-emerald-800' : 'text-emerald-400/90'
+            }`}
+          >
+            Documentation
+          </p>
+          <h2
+            className={`mt-0.5 font-serif text-base font-bold leading-tight sm:text-lg ${
+              theme === 'light' ? 'text-slate-900' : 'text-white'
+            }`}
+          >
+            Supports numériques
+          </h2>
+          <p
+            className={`mt-0.5 max-w-2xl text-xs leading-snug ${
+              theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+            }`}
+          >
+            Fascicules, fiches thématiques et ressources à feuilleter ou télécharger.
+          </p>
+        </section>
+
+        <div className="mb-4">
+          <div className="flex flex-wrap justify-center gap-2.5 sm:gap-3">
+            {thematicTabs.map((tab) => (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => setSelectedCategory(tab.name)}
-                className={`group relative w-16 h-16 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-110 flex items-center justify-center ${
+                className={`group relative flex h-14 w-14 items-center justify-center rounded-2xl border transition-all duration-200 ${
                   selectedCategory === tab.name
-                    ? 'bg-gray-300/80 text-gray-800 shadow-xl'
+                    ? theme === 'light'
+                      ? 'border-emerald-500/50 bg-white text-slate-900 ring-1 ring-emerald-500/35'
+                      : 'border-emerald-500/35 bg-emerald-950/40 text-white ring-1 ring-emerald-500/30'
                     : theme === 'light'
-                      ? 'bg-white/60 text-gray-700 hover:bg-white/80 backdrop-blur-sm border border-white/20'
-                      : 'bg-gray-800/60 text-gray-300 hover:bg-gray-700/80 backdrop-blur-sm border border-gray-700/20'
-                }`}
+                      ? 'border-slate-200/80 bg-white/80 text-slate-700 hover:border-emerald-200/80'
+                      : 'border-white/10 bg-white/[0.05] text-slate-300 hover:border-emerald-500/30 hover:bg-white/[0.08]'
+                } `}
                 title={tab.name}
               >
-                <div className={`text-2xl transition-all duration-300 ${
-                  selectedCategory === tab.name ? 'scale-130' : 'scale-100'
-                }`}>
+                <div
+                  className={`text-2xl leading-none transition-transform duration-200 sm:text-[1.75rem] ${
+                    selectedCategory === tab.name ? 'scale-105' : 'scale-100'
+                  }`}
+                >
                   {tab.icon}
                 </div>
                 {selectedCategory === tab.name && (
-                  <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-6 h-1 bg-gray-600 rounded-full"></div>
+                  <div className="absolute -bottom-1.5 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-emerald-500" />
                 )}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Grille des supports */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-10">
-          {filteredSupports.map(support => (
-            <SupportCard
-              key={support.id}
-              support={support}
-              onClick={handleSupportClick}
-            />
-          ))}
-        </div>
-
-        {/* Message si aucun résultat */}
-        {filteredSupports.length === 0 && (
-          <div className="text-center py-12">
-            <p className={`text-lg ${
-              theme === 'light' ? 'text-gray-600' : 'text-gray-300'
-            }`}>
-              Aucun document trouvé pour votre recherche.
+        {supportsError && (
+          <div
+            className={`mb-4 rounded-lg border px-3 py-2 text-sm ${
+              theme === 'light'
+                ? 'bg-amber-50 border-amber-200 text-amber-900'
+                : 'bg-amber-950/40 border-amber-800/50 text-amber-100'
+            }`}
+            role="alert"
+          >
+            <p className="font-medium">Impossible de charger le catalogue</p>
+            <p className="mt-1 opacity-90">{supportsError}</p>
+            <p className="mt-2 text-xs opacity-80">
+              Vérifiez que la table <code className="rounded bg-black/10 px-1">ressources_numeriques</code> existe
+              (migration SQL dans <code className="rounded bg-black/10 px-1">supabase/migrations</code>).
             </p>
           </div>
+        )}
+
+        {supportsLoading ? (
+          <div className="py-10 text-center">
+            <p className={theme === 'light' ? 'text-slate-600' : 'text-slate-400'}>Chargement des supports…</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2 md:gap-4">
+              {filteredSupports.map((support) => (
+                <SupportCard
+                  key={support.id}
+                  support={support}
+                  onClick={handleSupportClick}
+                />
+              ))}
+            </div>
+
+            {/* Message si aucun résultat */}
+            {filteredSupports.length === 0 && !supportsError && (
+              <div className="py-8 text-center">
+                <p
+                  className={`text-sm ${
+                    theme === 'light' ? 'text-slate-600' : 'text-slate-300'
+                  }`}
+                >
+                  {supports.length === 0
+                    ? 'Aucun support numérique publié pour le moment.'
+                    : 'Aucun document trouvé pour cette catégorie.'}
+                </p>
+              </div>
+            )}
+          </>
         )}
       </div>
 

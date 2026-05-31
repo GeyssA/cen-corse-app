@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import ProtectedRoute from '@/components/auth/ProtectedRoute'
 import UserMenu from '@/components/navigation/UserMenu'
 import MainNavigation from '@/components/navigation/MainNavigation'
@@ -17,42 +17,11 @@ import { useAuth } from '@/contexts/AuthContext'
 import { getSitesByUser } from '@/lib/sites'
 import { getObservationsByUser } from '@/lib/observations'
 import { setCachedMapData } from '@/lib/mapDataCache'
-import { useProjectsContext } from '@/contexts/ProjectsContext'
-import { getActivities, Activity } from '@/lib/activities'
-
-// Liste des photos disponibles avec leurs noms
-const PHOTOS = [
-  {
-    src: '/photos_page_accueil/Plaine de Linguizzetta-2025-© Geyssels A..jpg',
-    name: 'Plaine de Linguizzetta',
-    location: '2025',
-    author: '© Geyssels A.'
-  },
-  {
-    src: '/photos_page_accueil/Col du Monaco-Pianottoli Caldarello-2024-© Geyssels A..jpg',
-    name: 'Col du Monaco',
-    location: 'Pianottoli Caldarello',
-    author: '© Geyssels A.'
-  },
-  {
-    src: '/photos_page_accueil/Bufotes viridis balearicus-Lucciana-2011-© Hamoric N..jpg',
-    name: 'Bufotes viridis balearicus',
-    location: 'Lucciana',
-    author: '© Hamoric N.'
-  },
-  {
-    src: '/photos_page_accueil/Bufotes viridis balericus-Boziu (1100 mètres d\'altitude)-2025-© Ertzscheid N..jpg',
-    name: 'Bufotes viridis balearicus',
-    location: 'Boziu (1100 m)',
-    author: '© Ertzscheid N.'
-  },
-  {
-    src: '/photos_page_accueil/Amplexus de Bufotes viridis balericus-Boziu (1100 mètres d\'altitude)-2025-© Ertzscheid N..jpg',
-    name: 'Amplexus de Bufotes viridis balearicus',
-    location: 'Boziu (1100 m)',
-    author: '© Ertzscheid N.'
-  }
-]
+import { getActivities } from '@/lib/activities'
+import { getPhotoOfDayIndex } from '@/lib/galeriePhotos'
+import { useGaleriePhotos } from '@/hooks/useGaleriePhotos'
+import { getPendingCount, isOnline as isActuallyOnline, runSync } from '@/lib/offlineQueue'
+import { getWelcomeFlowDoneKey } from '@/lib/app-onboarding'
 
 // Bande défilante Collaborateurs & Partenaires (slider infini)
 function CollaborateursBande() {
@@ -64,7 +33,7 @@ function CollaborateursBande() {
     { src: "/Logos_soutien/EDF.png", alt: "EDF" },
     { src: "/Logos_soutien/CBNC.jpg", alt: "CBNC" },
     { src: "/Logos_soutien/CdCorse.jpg", alt: "CdCorse" },
-    { src: "/Logos_soutien/CPIE CORTE.jpg", alt: "CPIE Corte" },
+    { src: "/Logos_soutien/CPIE CORTE.jpg", alt: "CPIE Corte", className: "w-[72%] h-[72%] rounded-md" },
     { src: "/Logos_soutien/biophonia.png", alt: "Biophonia" },
     { src: "/Logos_soutien/CEN Lorraine.jpg", alt: "CEN Lorraine" },
     { src: "/Logos_soutien/Logo_Soptom.png", alt: "SOPTOM" }
@@ -82,8 +51,8 @@ function CollaborateursBande() {
           style={{ width: 'max-content' }}
         >
           {duplicated.map((logo, i) => (
-            <div key={i} className="flex-shrink-0 w-14 h-14 flex items-center justify-center bg-white rounded-xl p-1.5 shadow-sm">
-              <img src={logo.src} alt={logo.alt} className="w-full h-full object-contain opacity-90" />
+            <div key={i} className="flex-shrink-0 w-14 h-14 flex items-center justify-center bg-white rounded-xl p-1.5 shadow-sm overflow-hidden">
+              <img src={logo.src} alt={logo.alt} className={`w-full h-full object-contain opacity-90 ${logo.className ?? ''}`} />
             </div>
           ))}
         </div>
@@ -92,61 +61,123 @@ function CollaborateursBande() {
   )
 }
 
-// Composant photo du jour avec changement quotidien
+// Composant photo du jour (liste : table Supabase galerie_photos + fichiers bucket app-static)
 function PhotoOfTheDay() {
   const router = useRouter()
   const { theme } = useTheme()
+  const { photos, loading, error } = useGaleriePhotos()
+  const [isOffline, setIsOffline] = useState(false)
+  const [launchedOffline, setLaunchedOffline] = useState(false)
 
-  // Calculer l'index de la photo basé sur la date du jour
-  const getPhotoIndex = () => {
-    const today = new Date()
-    const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24))
-    return dayOfYear % PHOTOS.length
-  }
-  
-  const currentPhoto = PHOTOS[getPhotoIndex()]
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const initialOffline = !navigator.onLine
+    setLaunchedOffline(initialOffline)
+    const syncOnlineState = () => setIsOffline(!navigator.onLine)
+    syncOnlineState()
+    window.addEventListener('online', syncOnlineState)
+    window.addEventListener('offline', syncOnlineState)
+    return () => {
+      window.removeEventListener('online', syncOnlineState)
+      window.removeEventListener('offline', syncOnlineState)
+    }
+  }, [])
+
+  const today = new Date()
+  const dayOfYear = Math.floor(
+    (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24)
+  )
+  const idx = getPhotoOfDayIndex(dayOfYear, photos.length)
+  const currentPhoto = photos.length > 0 ? photos[idx] : null
+  const showOfflineLaunchBanner = launchedOffline && isOffline
 
   return (
-    <div className="relative w-full h-[26vh] min-h-[190px] max-h-[240px] overflow-hidden group">
-      <img 
-        src={currentPhoto.src} 
-        alt="Photo du jour CEN Corse" 
-        className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03] select-none pointer-events-none"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
-      <div className="absolute bottom-0 left-0 right-0 p-4">
-        <div className="flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/90 mb-0.5">Photo du jour</p>
-            <p className="text-lg font-bold text-white drop-shadow-md truncate">{currentPhoto.name}</p>
-          </div>
-          <button
-            onClick={() => router.push('/ressources?tab=galerie')}
-            className={`flex-shrink-0 rounded-full p-3 transition-all duration-300 hover:scale-105 backdrop-blur-md border border-white/20 ${
-              theme === 'light' ? 'bg-white/95 hover:bg-white text-gray-800' : 'bg-white/20 hover:bg-white/30 text-white'
-            }`}
-            aria-label="Voir la galerie"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </button>
+    <div className="relative w-full overflow-hidden group aspect-[16/9] min-h-[190px] max-h-[240px]">
+      {loading && (
+        <div
+          className={`absolute inset-0 flex items-center justify-center ${
+            theme === 'light' ? 'bg-gray-200' : 'bg-gray-800'
+          }`}
+        >
+          <p className={theme === 'light' ? 'text-gray-600' : 'text-gray-300'}>Chargement de la photo…</p>
         </div>
-      </div>
+      )}
+
+      {!loading && showOfflineLaunchBanner && (
+        <div
+          className={`absolute inset-0 flex flex-col items-center justify-center px-4 text-center ${
+            theme === 'light'
+              ? 'bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 text-slate-700'
+              : 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 text-slate-200'
+          }`}
+        >
+          <div className="-mt-6">
+            <p className="text-lg font-bold">Mode hors ligne</p>
+            <p className="mt-2 max-w-sm text-sm leading-relaxed opacity-95">
+              Hors ligne : ressources, activités et photos indisponibles. Vous pouvez tout de même ajouter vos données !!
+              Reconnectez-vous pour synchroniser et profiter pleinement de l'application.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!loading && !currentPhoto && !showOfflineLaunchBanner && (
+        <div
+          className={`absolute inset-0 flex flex-col items-center justify-center px-4 text-center ${
+            theme === 'light' ? 'bg-gray-200 text-gray-700' : 'bg-gray-800 text-gray-200'
+          }`}
+        >
+          {error ? (
+            <p className="text-sm">Photo indisponible. {error}</p>
+          ) : (
+            <p className="text-sm">Aucune photo publiée. Ajoutez des entrées dans la galerie Supabase.</p>
+          )}
+        </div>
+      )}
+
+      {currentPhoto && !showOfflineLaunchBanner && (
+        <img
+          src={currentPhoto.imageUrl}
+          alt="Photo du jour CEN Corse"
+          className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03] select-none pointer-events-none"
+        />
+      )}
+      {!showOfflineLaunchBanner && (
+        <>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 p-4">
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-widest !text-white mb-0.5">Photo du jour</p>
+                <p className="text-lg font-bold !text-white drop-shadow-md truncate">
+                  {currentPhoto ? currentPhoto.title : '—'}
+                </p>
+              </div>
+              <button
+                onClick={() => router.push('/ressources?tab=galerie')}
+                className={`flex-shrink-0 rounded-full p-3 transition-all duration-300 hover:scale-105 backdrop-blur-md border border-white/20 ${
+                  theme === 'light' ? 'bg-white/95 hover:bg-white text-gray-800' : 'bg-white/20 hover:bg-white/30 text-white'
+                }`}
+                aria-label="Voir la galerie"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
 
 function HomeContent() {
   const { user, profile } = useAuth(); // Utiliser useAuth pour vérifier l'auth
-  const { projects } = useProjectsContext(); // Récupérer les projets
   const router = useRouter();
-  const searchParams = useSearchParams();
-  // const { isOnline, pendingSync, isSyncing, forceSync } = useOfflineSync();
-  const isOnline = true;
-  const pendingSync: any[] = [];
-  const isSyncing = false;
-  const forceSync = () => {};
+  const [isOnline, setIsOnline] = useState(true);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showObservationModal, setShowObservationModal] = useState(false);
   const [voiceModeEnabled, setVoiceModeEnabled] = useState(false);
@@ -166,9 +197,26 @@ function HomeContent() {
   const [sitesRefreshKey, setSitesRefreshKey] = useState(0);
   const { theme } = useTheme();
   const [upcomingActivitiesCount, setUpcomingActivitiesCount] = useState(0);
-  
-  // Compter les projets en cours (status === 'active')
-  const activeProjectsCount = projects.filter(p => p.status === 'active').length;
+
+  const refreshPendingSyncCount = async () => {
+    try {
+      const count = await getPendingCount()
+      setPendingSyncCount(count)
+    } catch {
+      // Ne pas bloquer l'UI si IndexedDB indisponible
+    }
+  }
+
+  const forceSync = async () => {
+    if (!isActuallyOnline() || isSyncing) return
+    setIsSyncing(true)
+    try {
+      await runSync()
+    } finally {
+      setIsSyncing(false)
+      void refreshPendingSyncCount()
+    }
+  }
 
   // Précharger le chunk de la carte en arrière-plan pour ouvrir "Voir la map" plus vite
   useEffect(() => {
@@ -197,41 +245,30 @@ function HomeContent() {
       return;
     }
     
-    // Vérifier si CET utilisateur a déjà vu l'onboarding
-    const userOnboardingKey = `hasSeenOnboarding_${user.id}`;
-    const hasSeenOnboarding = localStorage.getItem(userOnboardingKey);
-    const isPWA = window.matchMedia('(display-mode: standalone)').matches;
-    
-    console.log('🔍 Vérification onboarding:', { 
-      userId: user.id,
-      hasSeenOnboarding,
-      userOnboardingKey,
-      isPWA, 
-      user: `CONNECTÉ: ${user.email}`,
-      profile: 'PROFIL PRÉSENT'
-    });
-    
-    // L'onboarding ne s'affiche que si :
-    // 1. L'utilisateur est connecté, a un profil avec un nom
-    // 2. ET qu'il n'a pas encore vu l'onboarding (pour CET utilisateur)
-    if (!hasSeenOnboarding) {
-      console.log('🔧 Première connexion de cet utilisateur - Affichage onboarding');
+    // Clé dédiée appli (install + flux v2) — indépendante d’éventuelles clés héritées d’un navigateur
+    const welcomeDone = localStorage.getItem(getWelcomeFlowDoneKey(user.id));
+    if (!welcomeDone) {
       setShowOnboarding(true);
     } else {
-      console.log('🔧 Utilisateur a déjà vu l\'onboarding');
       setShowOnboarding(false);
     }
-  }, [user, profile]); // Dépend de user et profile
+  }, [user, profile]);
 
-  // DÉSACTIVER le service worker pour tester
+  // Etat réseau + file d'attente hors ligne
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then((registrations) => {
-        registrations.forEach((registration) => {
-          console.log('🚫 Désactivation du Service Worker:', registration)
-          registration.unregister()
-        })
-      })
+    const updateOnlineState = () => setIsOnline(isActuallyOnline())
+    updateOnlineState()
+    void refreshPendingSyncCount()
+    const onSyncCompleted = () => {
+      void refreshPendingSyncCount()
+    }
+    window.addEventListener('online', updateOnlineState)
+    window.addEventListener('offline', updateOnlineState)
+    window.addEventListener('offline-sync-completed', onSyncCompleted)
+    return () => {
+      window.removeEventListener('online', updateOnlineState)
+      window.removeEventListener('offline', updateOnlineState)
+      window.removeEventListener('offline-sync-completed', onSyncCompleted)
     }
   }, [])
 
@@ -267,7 +304,8 @@ function HomeContent() {
           <div className="flex items-center min-h-0">
             <button
               onClick={() => setShowOnboarding(true)}
-              className="rounded-md flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shadow-md hover:shadow-lg bg-white"
+              type="button"
+              className="rounded-md flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shadow-md hover:shadow-lg bg-white overflow-hidden"
               style={{ width: 'clamp(120px, 30vw, 172px)', height: 'clamp(34px, 9vw, 44px)' }}
             >
               <img src="/Logo_CENCorse.png" alt="CEN Corse" className="h-9 w-auto max-w-[160px] object-contain block" />
@@ -290,97 +328,128 @@ function HomeContent() {
           <PhotoOfTheDay />
         </section>
 
-        <main className="max-w-lg mx-auto px-4 pt-5 pb-6 space-y-8 w-full overflow-x-hidden">
-          {/* Projets en cours + Activités du mois — encadrés côte à côte, typos similaires */}
-          <section className="flex items-stretch gap-2">
-            <div
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-sm font-medium min-w-0 border ${
-                theme === 'light'
-                  ? 'bg-white/80 border-gray-200 text-gray-700'
-                  : 'bg-gray-800/60 border-gray-600/70 text-gray-300'
-              }`}
-            >
-              <span className="relative flex h-2 w-2 flex-shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-              </span>
-              <span className="truncate">
-                {activeProjectsCount} projet{activeProjectsCount > 1 ? 's' : ''} en cours
-              </span>
-            </div>
+        <main className="max-w-lg mx-auto px-4 pt-3 pb-6 space-y-5 w-full overflow-x-hidden">
+          {/* Activités du mois — fine bande, peu intrusive */}
+          <section className="flex justify-center">
             <button
+              type="button"
               onClick={() => router.push('/communaute?tab=activites&subtab=upcoming')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-200 hover:opacity-90 min-w-0 border ${
+              className={`group grid w-full max-w-md grid-cols-[2rem_1fr_2rem] items-center gap-1 rounded-lg border px-2 py-2 transition-colors ${
                 theme === 'light'
-                  ? 'bg-white/80 border-gray-200 text-gray-700 hover:bg-gray-50'
-                  : 'bg-gray-800/60 border-gray-600/70 text-gray-300 hover:bg-gray-800/80'
+                  ? 'border-slate-200/90 bg-white/70 text-slate-600 hover:border-amber-200 hover:bg-amber-50/50'
+                  : 'border-white/10 bg-white/[0.04] text-slate-400 hover:border-amber-500/30 hover:bg-white/[0.06]'
               }`}
             >
-              <svg className={`w-4 h-4 flex-shrink-0 ${theme === 'light' ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <span className="truncate">Activités du mois</span>
-              {upcomingActivitiesCount > 0 && (
-                <span className="min-w-[18px] h-[18px] rounded-full bg-amber-500 text-white text-[10px] flex items-center justify-center font-bold flex-shrink-0">
-                  {upcomingActivitiesCount}
-                </span>
-              )}
+              <span className="flex justify-center">
+                <svg
+                  className={`h-4 w-4 ${theme === 'light' ? 'text-amber-600/90' : 'text-amber-500/80'}`}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.75}
+                  viewBox="0 0 24 24"
+                  aria-hidden
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </span>
+              <span className="min-w-0 text-center text-[13px] font-medium">
+                <span className={theme === 'light' ? 'text-slate-700' : 'text-slate-300'}>Activité du mois</span>
+                {upcomingActivitiesCount > 0 && (
+                  <span className={`ml-1.5 tabular-nums ${theme === 'light' ? 'text-amber-700' : 'text-amber-400'}`}>
+                    · {upcomingActivitiesCount}
+                  </span>
+                )}
+              </span>
+              <span className="flex justify-center">
+                <svg
+                  className={`h-4 w-4 transition-transform group-hover:translate-x-0.5 ${
+                    theme === 'light' ? 'text-slate-400' : 'text-slate-500'
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </span>
             </button>
           </section>
 
-          {/* Données naturalistes — encart soigné avec touches de couleur */}
-          <section className={`mt-6 relative overflow-hidden rounded-2xl border ${
-            theme === 'light'
-              ? 'bg-white/95 shadow-md shadow-slate-200/50 border-emerald-200/60'
-              : 'bg-slate-800/50 shadow-lg shadow-black/20 border-emerald-800/40'
-          }`}>
-            {/* Bandeau d’accent à gauche — vert doux */}
-            <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl ${
-              theme === 'light' ? 'bg-emerald-500/80' : 'bg-emerald-500/70'
-            }`} />
-            <div className="pl-5 pr-4 py-5">
-              <div className="flex items-center gap-3 mb-1">
-                <span className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                  theme === 'light' ? 'bg-emerald-100 text-emerald-700 shadow-sm' : 'bg-emerald-500/20 text-emerald-400'
-                }`}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                    <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </span>
-                <div>
-                  <h2 className={`text-lg font-bold tracking-tight ${
-                    theme === 'light' ? 'text-slate-800' : 'text-slate-100'
-                  }`}>
-                    Données naturalistes
-                  </h2>
-                  <p className={`text-sm mt-0.5 ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
-                    Contribuez à la connaissance de la biodiversité en enregistrant vos observations sur le terrain.
-                  </p>
-                </div>
+          {/* Données naturalistes — mise en avant, cartes cliquables */}
+          <section
+            className={`relative overflow-hidden rounded-2xl border ${
+              theme === 'light'
+                ? 'border-emerald-200/70 bg-gradient-to-b from-white via-emerald-50/40 to-teal-50/30 shadow-lg shadow-emerald-900/5'
+                : 'border-emerald-900/50 bg-gradient-to-b from-slate-900/90 via-emerald-950/20 to-slate-900/80 shadow-xl shadow-black/30'
+            }`}
+          >
+            <div
+              className={`pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent ${
+                theme === 'light' ? 'via-emerald-300/50' : 'via-emerald-500/30'
+              } to-transparent`}
+            />
+            <div className="relative px-4 pb-5 pt-5 sm:px-5">
+              <div className="mb-4 text-center sm:text-left">
+                <p
+                  className={`mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] ${
+                    theme === 'light' ? 'text-emerald-800/80' : 'text-emerald-400/90'
+                  }`}
+                >
+                  Terrain &amp; science
+                </p>
+                <h2
+                  className={`font-serif text-[1.35rem] font-bold leading-tight tracking-tight sm:text-2xl ${
+                    theme === 'light' ? 'text-slate-900' : 'text-white'
+                  }`}
+                >
+                  Données naturalistes
+                </h2>
+                <p className={`mx-auto mt-2 max-w-md text-sm leading-relaxed sm:mx-0 ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
+                  Enregistrez espèces et lieux : vos observations nourrissent la connaissance de la biodiversité corse.
+                </p>
               </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-3.5 mt-1">
               <div className="flex flex-col gap-3">
                 <button
                   onClick={async () => {
                     if (isCapacitorNative()) await requestLocationPermissionIfNeeded()
                     setShowObservationModal(true)
                   }}
-                  className={`flex items-center gap-3 p-3.5 rounded-xl text-left transition-all duration-200 hover:opacity-95 active:scale-[0.99] border w-full ${
+                  className={`group/obs flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-all duration-200 active:scale-[0.98] ${
                     theme === 'light'
-                      ? 'bg-emerald-50/80 hover:bg-emerald-100/80 text-slate-700 border-emerald-200/60 shadow-sm hover:shadow'
-                      : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-slate-200 border-emerald-500/20'
+                      ? 'border-emerald-200/80 bg-white/90 text-slate-800 shadow-sm ring-emerald-500/10 hover:-translate-y-0.5 hover:border-emerald-400/80 hover:shadow-md hover:shadow-emerald-900/10'
+                      : 'border-emerald-500/25 bg-emerald-950/30 text-slate-100 hover:-translate-y-0.5 hover:border-emerald-400/40 hover:bg-emerald-900/40 hover:shadow-lg hover:shadow-emerald-950/50'
                   }`}
                 >
-                  <span className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${theme === 'light' ? 'bg-emerald-100 text-emerald-700 shadow-sm' : 'bg-emerald-500/25 text-emerald-400'}`}>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                  <span
+                    className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover/obs:scale-105 ${
+                      theme === 'light'
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25'
+                        : 'bg-emerald-500/90 text-emerald-950 shadow-inner'
+                    }`}
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
                       <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2V5a2 2 0 00-2-2h-2" />
                       <path d="M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                     </svg>
                   </span>
-                  <div className="min-w-0">
-                    <span className="text-sm font-medium block">Ajouter une observation</span>
-                    <span className="text-xs opacity-80">Espèce, lieu, effectif…</span>
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-[15px] font-semibold leading-tight">Ajouter une observation</span>
+                    <span className={`mt-0.5 block text-xs ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
+                      Espèce, lieu, effectif…
+                    </span>
                   </div>
+                  <svg
+                    className={`h-5 w-5 flex-shrink-0 opacity-40 transition group-hover/obs:translate-x-0.5 group-hover/obs:opacity-100 ${
+                      theme === 'light' ? 'text-emerald-800' : 'text-emerald-400'
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
                 </button>
                 <div className={`rounded-xl overflow-hidden ${theme === 'light' ? 'text-emerald-700/80' : 'text-emerald-400/80'}`}>
                   <div className={`animate-voice-ring rounded-xl ${theme === 'light' ? 'bg-slate-50' : 'bg-slate-800/40'}`}>
@@ -445,50 +514,70 @@ function HomeContent() {
                   if (isCapacitorNative()) await requestLocationPermissionIfNeeded()
                   setShowAddSiteModal(true)
                 }}
-                className={`flex items-center gap-3 p-3.5 rounded-xl text-left transition-all duration-200 hover:opacity-95 active:scale-[0.99] border ${
+                className={`group/site flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-all duration-200 active:scale-[0.98] ${
                   theme === 'light'
-                    ? 'bg-sky-50/80 hover:bg-sky-100/80 text-slate-700 border-sky-200/60 shadow-sm hover:shadow'
-                    : 'bg-sky-500/10 hover:bg-sky-500/20 text-slate-200 border-sky-500/20'
+                    ? 'border-sky-200/80 bg-white/90 text-slate-800 shadow-sm hover:-translate-y-0.5 hover:border-sky-400/70 hover:shadow-md hover:shadow-sky-900/10'
+                    : 'border-sky-500/30 bg-sky-950/25 text-slate-100 hover:-translate-y-0.5 hover:border-sky-400/35 hover:bg-sky-950/40 hover:shadow-lg'
                 }`}
               >
-                <span className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${theme === 'light' ? 'bg-sky-100 text-sky-700 shadow-sm' : 'bg-sky-500/25 text-sky-400'}`}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <span
+                  className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover/site:scale-105 ${
+                    theme === 'light'
+                      ? 'bg-sky-600 text-white shadow-md shadow-sky-600/25'
+                      : 'bg-sky-500/90 text-sky-950'
+                  }`}
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
                     <path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                 </span>
-                <div className="min-w-0">
-                  <span className="text-sm font-medium block">Ajouter un site</span>
-                  <span className="text-xs opacity-80">Lieu d’observation récurrent</span>
+                <div className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold leading-tight">Ajouter un site</span>
+                  <span className={`mt-0.5 block text-xs ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
+                    Lieu d&apos;observation récurrent
+                  </span>
                 </div>
+                <svg
+                  className={`h-5 w-5 flex-shrink-0 opacity-40 transition group-hover/site:translate-x-0.5 group-hover/site:opacity-100 ${
+                    theme === 'light' ? 'text-sky-800' : 'text-sky-400'
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </button>
             </div>
-            <div className="flex flex-col gap-2 mt-3 px-1">
+            <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
               <button
+                type="button"
                 onClick={() => setShowMapModal(true)}
-                className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all duration-200 border ${
+                className={`flex w-full items-center justify-center gap-2 rounded-xl border py-3.5 text-sm font-semibold transition-all duration-200 active:scale-[0.99] ${
                   theme === 'light'
-                    ? 'bg-slate-100 hover:bg-slate-200/80 text-slate-700 border-slate-200/60'
-                    : 'bg-slate-700/40 hover:bg-slate-600/50 text-slate-300 border-slate-600/50'
+                    ? 'border-slate-200/90 bg-white/80 text-slate-800 hover:border-teal-300 hover:bg-teal-50/80 hover:text-teal-900'
+                    : 'border-white/10 bg-white/[0.06] text-slate-200 hover:border-teal-500/40 hover:bg-teal-950/40 hover:text-teal-100'
                 }`}
               >
-                <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.45-2.72A1 1 0 013 16.382V5.618a1 1 0 011.55-.832L9 7m0 13l6-3m-6 3V7m6 10l4.55 2.27a1 1 0 001.45-.83V5.618a1 1 0 00-.55-.832L15 4m0 0V4m0 0L9 7" />
                 </svg>
-                Voir mes données sur la map
+                Voir sur la MAP
               </button>
               <button
+                type="button"
                 onClick={() => router.push('/validation')}
-                className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all duration-200 border ${
+                className={`flex w-full items-center justify-center gap-2 rounded-xl border py-3.5 text-sm font-semibold transition-all duration-200 active:scale-[0.99] ${
                   theme === 'light'
-                    ? 'bg-amber-50 hover:bg-amber-100/80 text-amber-800 border-amber-200/70'
-                    : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 border-amber-500/30'
+                    ? 'border-slate-200/90 bg-white/80 text-slate-800 hover:border-amber-300 hover:bg-amber-50/90 hover:text-amber-950'
+                    : 'border-white/10 bg-white/[0.06] text-slate-200 hover:border-amber-500/35 hover:bg-amber-950/35 hover:text-amber-100'
                 }`}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Exportez vos données (.csv)
+                Mes observations
               </button>
             </div>
             </div>
@@ -536,13 +625,13 @@ function HomeContent() {
             </div>
           )}
               
-          {pendingSync.length > 0 && (
+          {pendingSyncCount > 0 && (
             <div className="fixed top-4 left-4 z-50">
               <div className="glass-effect text-blue-400 px-3 py-2 rounded-lg text-xs font-medium shadow-2xl flex items-center space-x-2 border border-blue-500/30">
-                <span>🔄 {pendingSync.length} en attente</span>
+                <span>🔄 {pendingSyncCount} en attente</span>
                 {isOnline && !isSyncing && (
                   <button
-                    onClick={forceSync}
+                    onClick={() => { void forceSync() }}
                     className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 px-2 py-1 rounded text-xs transition-all duration-300 hover:scale-105"
                   >
                     Sync
