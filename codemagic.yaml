@@ -1,0 +1,74 @@
+# Codemagic — CEN Corse (Capacitor + Next export)
+# Doc : https://docs.codemagic.io/yaml-quick-start/building-a-capacitor-app/
+#
+# Avant le 1er build :
+# 1) Remplacer app_store_connect_cen_corse par le nom de ton intégration App Store Connect (Codemagic > Team settings > Integrations).
+# 2) Créer le groupe d’env "cen_corse" avec NEXT_PUBLIC_SUPABASE_URL et NEXT_PUBLIC_SUPABASE_ANON_KEY (Secure).
+# 3) Renseigner APP_STORE_APPLE_ID (numérique, App Store Connect > App > Informations générales > Identifiant Apple).
+
+workflows:
+  cencorse-ios-release:
+    name: CEN Corse iOS (App Store)
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
+    integrations:
+      app_store_connect: app_store_connect_cen_corse
+
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.cencorse.app
+      groups:
+        - cen_corse
+      vars:
+        XCODE_WORKSPACE: ios/App/App.xcworkspace
+        XCODE_SCHEME: App
+        BUNDLE_ID: com.cencorse.app
+        APP_STORE_APPLE_ID: 0
+      node: 20
+      xcode: latest
+      cocoapods: default
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+
+    scripts:
+      - name: Dépendances npm
+        script: npm ci
+
+      - name: Build web Capacitor + sync iOS
+        script: npm run build:capacitor
+
+      - name: CocoaPods
+        script: cd ios/App && pod install
+
+      - name: Numéro de build iOS
+        script: |
+          cd ios/App
+          LATEST=$(app-store-connect get-latest-build-number "$APP_STORE_APPLE_ID" || echo 0)
+          agvtool new-version -all $((LATEST + 1))
+
+      - name: Signature Xcode
+        script: xcode-project use-profiles
+
+      - name: IPA App Store
+        script: |
+          xcode-project build-ipa \
+            --workspace "$CM_BUILD_DIR/$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - Internal Testers
