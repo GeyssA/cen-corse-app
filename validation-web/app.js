@@ -41,16 +41,22 @@ const theadSites = document.getElementById('theadSites')
 const tabCountObs = document.getElementById('tabCountObs')
 const tabCountSites = document.getElementById('tabCountSites')
 
-let showValidatedOnly = false
+/** 'all' | 'validated' | 'pending' */
+let validationFilter = 'all'
 let searchObsColumn = 'nom_espece'
 let searchSitesColumn = 'nom_du_site'
 
 const selectedObsIds = new Set()
 const selectedSiteIds = new Set()
 
+function applyValidationFilter(list) {
+  if (validationFilter === 'validated') return list.filter((r) => r.validated)
+  if (validationFilter === 'pending') return list.filter((r) => !r.validated)
+  return list
+}
+
 function getFilteredObservations() {
-  let list = observations
-  if (showValidatedOnly) list = list.filter(o => o.validated)
+  let list = applyValidationFilter(observations)
   const q = filterObsText.trim().toLowerCase()
   if (q) {
     const key = searchObsColumn
@@ -64,8 +70,7 @@ function getFilteredObservations() {
 }
 
 function getFilteredSites() {
-  let list = sites
-  if (showValidatedOnly) list = list.filter(s => s.validated)
+  let list = applyValidationFilter(sites)
   const q = filterSitesText.trim().toLowerCase()
   if (q) {
     const key = searchSitesColumn
@@ -76,6 +81,54 @@ function getFilteredSites() {
     })
   }
   return list
+}
+
+function showToast(message, type = 'success') {
+  const stack = document.getElementById('toastStack')
+  if (!stack) return
+  const el = document.createElement('div')
+  el.className = `toast ${type}`
+  el.textContent = message
+  stack.appendChild(el)
+  setTimeout(() => {
+    el.classList.add('out')
+    setTimeout(() => el.remove(), 260)
+  }, 2200)
+}
+
+function setLoading(on) {
+  const overlay = document.getElementById('loadingOverlay')
+  if (!overlay) return
+  overlay.classList.toggle('hidden', !on)
+}
+
+function updateStats() {
+  const pending =
+    observations.filter((o) => !o.validated).length +
+    sites.filter((s) => !s.validated).length
+  const validated =
+    observations.filter((o) => o.validated).length +
+    sites.filter((s) => s.validated).length
+  const total = observations.length + sites.length
+  const elPending = document.getElementById('statPending')
+  const elValidated = document.getElementById('statValidated')
+  const elTotal = document.getElementById('statTotal')
+  if (elPending) elPending.textContent = String(pending)
+  if (elValidated) elValidated.textContent = String(validated)
+  if (elTotal) elTotal.textContent = String(total)
+}
+
+function validatedCell(isValidated) {
+  return isValidated
+    ? '<td class="cell-validated"><span class="status-pill yes">Validée</span></td>'
+    : '<td class="cell-validated"><span class="status-pill no">À valider</span></td>'
+}
+
+function setEmptyState(kind, isEmpty) {
+  const empty = document.getElementById(kind === 'observation' ? 'emptyObs' : 'emptySites')
+  const tableWrap = empty?.previousElementSibling
+  if (empty) empty.classList.toggle('hidden', !isEmpty)
+  if (tableWrap) tableWrap.classList.toggle('hidden', isEmpty)
 }
 
 function isAccessGranted() {
@@ -147,7 +200,7 @@ function downloadCsv(filename, content) {
 function showApp() {
   loginSection.classList.add('hidden')
   dataSection.classList.remove('hidden')
-  headerActions.innerHTML = '<button type="button" class="btn btn-ghost" id="btnLogoutHeader">Fermer la session</button>'
+  headerActions.innerHTML = '<button type="button" class="btn btn-ghost btn-sm" id="btnLogoutHeader">Fermer la session</button>'
   document.getElementById('btnLogoutHeader').addEventListener('click', hideApp)
   loadData()
 }
@@ -163,24 +216,29 @@ function hideApp() {
 
 async function loadData() {
   showDataHint('')
+  setLoading(true)
   let obsError = null
   let sitesError = null
 
-  const { data: obsData, error: oErr } = await supabase
-    .from('observations')
-    .select('*')
-    .order('created_at', { ascending: false })
-  obsError = oErr
-  if (oErr) console.error('Observations:', oErr)
-  observations = obsError ? [] : (obsData || [])
+  try {
+    const { data: obsData, error: oErr } = await supabase
+      .from('observations')
+      .select('*')
+      .order('created_at', { ascending: false })
+    obsError = oErr
+    if (oErr) console.error('Observations:', oErr)
+    observations = obsError ? [] : (obsData || [])
 
-  const { data: sitesData, error: sErr } = await supabase
-    .from('observation_sites')
-    .select('*')
-    .order('created_at', { ascending: false })
-  sitesError = sErr
-  if (sErr) console.error('Sites:', sErr)
-  sites = sitesError ? [] : (sitesData || [])
+    const { data: sitesData, error: sErr } = await supabase
+      .from('observation_sites')
+      .select('*')
+      .order('created_at', { ascending: false })
+    sitesError = sErr
+    if (sErr) console.error('Sites:', sErr)
+    sites = sitesError ? [] : (sitesData || [])
+  } finally {
+    setLoading(false)
+  }
 
   if (obsError || sitesError) {
     const errMsg = [obsError, sitesError].filter(Boolean).map(e => e?.message || e?.code || String(e)).join(' — ')
@@ -199,6 +257,7 @@ async function loadData() {
   renderSitesTable()
   updateMap()
   updateTabCounts()
+  updateStats()
   updateSearchSuggestions()
 }
 
@@ -211,16 +270,26 @@ function updateTabCounts() {
   const selSites = siteList.filter(s => selectedSiteIds.has(s.id)).length
   if (tabCountObs) {
     if (selObs > 0) {
-      tabCountObs.textContent = ` (${totalObs} · ${obsList.length} · ${selObs} sélectionnée${selObs > 1 ? 's' : ''})`
+      tabCountObs.textContent = `${obsList.length} · ${selObs}`
+      tabCountObs.title = `${totalObs} au total, ${obsList.length} filtrées, ${selObs} sélectionnée(s)`
+    } else if (obsList.length !== totalObs) {
+      tabCountObs.textContent = `${obsList.length}/${totalObs}`
+      tabCountObs.title = `${obsList.length} filtrées sur ${totalObs}`
     } else {
-      tabCountObs.textContent = obsList.length === totalObs ? ` (${totalObs})` : ` (${totalObs} · ${obsList.length})`
+      tabCountObs.textContent = String(totalObs)
+      tabCountObs.title = ''
     }
   }
   if (tabCountSites) {
     if (selSites > 0) {
-      tabCountSites.textContent = ` (${totalSites} · ${siteList.length} · ${selSites} sélectionné${selSites > 1 ? 's' : ''})`
+      tabCountSites.textContent = `${siteList.length} · ${selSites}`
+      tabCountSites.title = `${totalSites} au total, ${siteList.length} filtrés, ${selSites} sélectionné(s)`
+    } else if (siteList.length !== totalSites) {
+      tabCountSites.textContent = `${siteList.length}/${totalSites}`
+      tabCountSites.title = `${siteList.length} filtrés sur ${totalSites}`
     } else {
-      tabCountSites.textContent = siteList.length === totalSites ? ` (${totalSites})` : ` (${totalSites} · ${siteList.length})`
+      tabCountSites.textContent = String(totalSites)
+      tabCountSites.title = ''
     }
   }
   updateMapVisibleCount()
@@ -313,6 +382,7 @@ function lightboxNext() {
 
 function renderObservationsTable() {
   const filtered = getFilteredObservations()
+  setEmptyState('observation', filtered.length === 0)
   const columns = [
     { key: '_select', label: '', type: 'select', dataType: 'observation' },
     { key: 'photo_url', label: 'Photo', type: 'photo' },
@@ -349,7 +419,7 @@ function renderObservationsTable() {
       if (c.type === 'bool') return `<td>${o[c.key] ? 'Oui' : 'Non'}</td>`
       if (c.type === 'num') return `<td class="cell-numeric">${o[c.key] != null ? Number(o[c.key]).toFixed(5) : '—'}</td>`
       if (c.type === 'date') return `<td class="cell-date">${formatDate(o[c.key])}</td>`
-      if (c.type === 'validated') return `<td class="cell-validated ${o.validated ? 'yes' : 'no'}">${o.validated ? 'Oui' : 'Non'}</td>`
+      if (c.type === 'validated') return validatedCell(!!o.validated)
       if (c.type === 'action' && c.action === 'observation') {
         if (o.validated) {
           return `<td class="cell-actions"><button type="button" class="btn btn-sm btn-ghost btn-unvalidate" data-id="${o.id}" data-type="observation">Retirer validation</button></td>`
@@ -398,6 +468,7 @@ function renderObservationsTable() {
 
 function renderSitesTable() {
   const filtered = getFilteredSites()
+  setEmptyState('site', filtered.length === 0)
   const columns = [
     { key: '_select', label: '', type: 'select', dataType: 'site' },
     { key: 'photo_url', label: 'Photo', type: 'photo' },
@@ -425,7 +496,7 @@ function renderSitesTable() {
       }
       if (c.type === 'num') return `<td class="cell-numeric">${s[c.key] != null ? Number(s[c.key]).toFixed(c.key === 'length_meters' ? 1 : 5) : '—'}</td>`
       if (c.type === 'date') return `<td class="cell-date">${formatDate(s[c.key])}</td>`
-      if (c.type === 'validated') return `<td class="cell-validated ${s.validated ? 'yes' : 'no'}">${s.validated ? 'Oui' : 'Non'}</td>`
+      if (c.type === 'validated') return validatedCell(!!s.validated)
       if (c.type === 'action' && c.action === 'site') {
         if (s.validated) {
           return `<td class="cell-actions"><button type="button" class="btn btn-sm btn-ghost btn-unvalidate" data-id="${s.id}" data-type="site">Retirer validation</button></td>`
@@ -478,6 +549,7 @@ async function validateRow(id, type) {
     .eq('id', id)
   if (error) {
     console.error('Validation:', error)
+    showToast('Échec de la validation', 'error')
     return
   }
   if (type === 'observation') {
@@ -491,6 +563,14 @@ async function validateRow(id, type) {
   renderSitesTable()
   updateMap()
   updateTabCounts()
+  updateStats()
+  showToast(type === 'observation' ? 'Observation validée' : 'Site validé', 'success')
+  const tbody = type === 'observation' ? tbodyObservations : tbodySites
+  const row = tbody?.querySelector(`tr[data-id="${id}"]`)
+  if (row) {
+    row.classList.add('row-flash')
+    setTimeout(() => row.classList.remove('row-flash'), 700)
+  }
 }
 
 async function unvalidateRow(id, type) {
@@ -501,6 +581,7 @@ async function unvalidateRow(id, type) {
     .eq('id', id)
   if (error) {
     console.error('Retrait validation:', error)
+    showToast('Échec du retrait', 'error')
     return
   }
   if (type === 'observation') {
@@ -514,6 +595,8 @@ async function unvalidateRow(id, type) {
   renderSitesTable()
   updateMap()
   updateTabCounts()
+  updateStats()
+  showToast('Validation retirée', 'success')
 }
 
 function selectAllObservation() {
@@ -778,7 +861,7 @@ function bindSearchAndMapControls() {
 
   if (filterValidated) {
     filterValidated.addEventListener('change', () => {
-      showValidatedOnly = filterValidated.value === 'validated'
+      validationFilter = filterValidated.value
       renderObservationsTable()
       renderSitesTable()
       updateMap()
@@ -830,16 +913,14 @@ function updateSearchSuggestions() {
   const keyObs = colObs ? colObs.value : searchObsColumn
   const keySites = colSites ? colSites.value : searchSitesColumn
   if (listObs && keyObs) {
-    let list = observations
-    if (showValidatedOnly) list = list.filter(o => o.validated)
+    let list = applyValidationFilter(observations)
     const values = [...new Set(list.map(o => o[keyObs]).filter(Boolean).map(String))].sort()
     const q = filterObsText.trim().toLowerCase()
     const filtered = q ? values.filter(v => v.toLowerCase().includes(q)) : values
     listObs.innerHTML = filtered.slice(0, 50).map(v => `<option value="${v.replace(/"/g, '&quot;')}">`).join('')
   }
   if (listSites && keySites) {
-    let list = sites
-    if (showValidatedOnly) list = list.filter(s => s.validated)
+    let list = applyValidationFilter(sites)
     const values = [...new Set(list.map(s => s[keySites]).filter(Boolean).map(String))].sort()
     const q = filterSitesText.trim().toLowerCase()
     const filtered = q ? values.filter(v => v.toLowerCase().includes(q)) : values
@@ -938,6 +1019,9 @@ setupTabs()
 
 bindSearchAndMapControls()
 bindSelectionToolbar()
+
+const btnRefresh = document.getElementById('btnRefresh')
+if (btnRefresh) btnRefresh.addEventListener('click', () => loadData())
 
 function bindSelectionToolbar() {
   const byId = (id) => document.getElementById(id)

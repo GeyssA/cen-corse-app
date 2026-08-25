@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="assets/Logo_CENCorse-removebg-preview.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
@@ -17,21 +17,25 @@
   <div id="app">
     <header class="header">
       <div class="header-inner">
-        <div class="logo-bg">
-          <img src="assets/Logo_CENCorse-removebg-preview.png" alt="CEN Corse" class="header-logo" />
+        <div class="brand">
+          <div class="logo-bg">
+            <img src="assets/Logo_CENCorse-removebg-preview.png" alt="CEN Corse" class="header-logo" />
+          </div>
+          <div class="brand-text">
+            <h1 class="logo">Validation des données</h1>
+            <p class="logo-sub">CEN Corse · naturalistes</p>
+          </div>
         </div>
-        <h1 class="logo">Validation des données naturalistes</h1>
         <div class="header-actions" id="headerActions"></div>
       </div>
     </header>
 
     <main class="main">
-      <!-- Écran code d'accès -->
       <section id="loginSection" class="gate-section">
-        <div class="gate-bg-shapes" aria-hidden="true">
-          <span class="gate-shape gate-shape-1"></span>
-          <span class="gate-shape gate-shape-2"></span>
-          <span class="gate-shape gate-shape-3"></span>
+        <div class="gate-bg" aria-hidden="true">
+          <span class="gate-glow gate-glow-1"></span>
+          <span class="gate-glow gate-glow-2"></span>
+          <span class="gate-grid"></span>
         </div>
         <div class="gate-card">
           <div class="gate-brand">
@@ -39,32 +43,60 @@
               <img src="assets/Logo_CENCorse-removebg-preview.png" alt="CEN Corse" class="gate-logo" />
             </div>
           </div>
-          <h2>Accès à l'interface de validation</h2>
-          <p class="gate-hint">Entrez le code d'accès pour visualiser et valider les données.</p>
+          <h2>Interface de validation</h2>
+          <p class="gate-hint">Saisissez le code d’accès pour consulter et valider les observations et sites.</p>
           <form id="loginForm" class="gate-form">
-            <label for="accessCode">Code d'accès</label>
+            <label for="accessCode">Code d’accès</label>
             <input type="password" id="accessCode" inputmode="numeric" autocomplete="off" placeholder="•••••" maxlength="10" />
             <p id="loginError" class="gate-error" aria-live="polite"></p>
-            <button type="submit" class="btn btn-primary btn-block" id="loginSubmit">Accéder</button>
+            <button type="submit" class="btn btn-primary btn-block" id="loginSubmit">
+              <span>Accéder</span>
+            </button>
           </form>
         </div>
       </section>
 
-      <!-- Application principale -->
       <section id="dataSection" class="data-section hidden">
+        <div class="stats-row" id="statsRow" aria-live="polite">
+          <div class="stat-card">
+            <span class="stat-value" id="statPending">—</span>
+            <span class="stat-label">À valider</span>
+          </div>
+          <div class="stat-card stat-card-ok">
+            <span class="stat-value" id="statValidated">—</span>
+            <span class="stat-label">Validées</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="statTotal">—</span>
+            <span class="stat-label">Total</span>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm btn-refresh" id="btnRefresh" title="Actualiser les données">
+            Actualiser
+          </button>
+        </div>
+
         <div class="toolbar">
           <div class="tabs" role="tablist">
-            <button type="button" class="tab active" data-tab="observations" aria-selected="true"><span class="tab-label">Observations</span> <span class="tab-count" id="tabCountObs">(0)</span></button>
-            <button type="button" class="tab" data-tab="sites" aria-selected="false"><span class="tab-label">Sites</span> <span class="tab-count" id="tabCountSites">(0)</span></button>
-            <button type="button" class="tab" data-tab="map" aria-selected="false"><span class="tab-label">Carte</span></button>
+            <button type="button" class="tab active" data-tab="observations" aria-selected="true">
+              <span class="tab-label">Observations</span>
+              <span class="tab-count" id="tabCountObs">0</span>
+            </button>
+            <button type="button" class="tab" data-tab="sites" aria-selected="false">
+              <span class="tab-label">Sites</span>
+              <span class="tab-count" id="tabCountSites">0</span>
+            </button>
+            <button type="button" class="tab" data-tab="map" aria-selected="false">
+              <span class="tab-label">Carte</span>
+            </button>
           </div>
           <div class="toolbar-actions">
             <select id="filterValidated" class="filter-validated" title="Afficher tout ou validées uniquement">
               <option value="all">Tout</option>
               <option value="validated">Validées uniquement</option>
+              <option value="pending">À valider uniquement</option>
             </select>
-            <button type="button" class="btn btn-outline" id="btnExportAll" title="Exporter toutes les données en .csv">Exporter tout (.csv)</button>
-            <button type="button" class="btn btn-success" id="btnExportValidated" title="Exporter uniquement les données validées">Exporter validées (.csv)</button>
+            <button type="button" class="btn btn-outline" id="btnExportAll" title="Exporter toutes les données en .csv">Exporter tout</button>
+            <button type="button" class="btn btn-success" id="btnExportValidated" title="Exporter uniquement les données validées">Exporter validées</button>
           </div>
         </div>
 
@@ -94,20 +126,26 @@
               <div class="selection-toolbar" data-type="observation">
                 <button type="button" class="btn btn-ghost btn-sm" id="btnObsSelectAll">Tout sélectionner</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btnObsDeselectAll">Tout désélectionner</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btnObsInvert">Inverser la sélection</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btnObsInvert">Inverser</button>
               </div>
             </div>
-            <div class="table-wrapper table-wrapper-integrated">
-              <table class="data-table" id="tableObservations">
-                <thead id="theadObservations"></thead>
-                <tbody id="tbodyObservations"></tbody>
-              </table>
+            <div class="table-shell">
+              <div class="table-wrapper table-wrapper-integrated">
+                <table class="data-table" id="tableObservations">
+                  <thead id="theadObservations"></thead>
+                  <tbody id="tbodyObservations"></tbody>
+                </table>
+              </div>
+              <div id="emptyObs" class="empty-state hidden">
+                <p class="empty-title">Aucune observation</p>
+                <p class="empty-text">Modifiez les filtres ou attendez de nouvelles saisies depuis l’app.</p>
+              </div>
             </div>
           </div>
 
           <div id="panelSites" class="panel" role="tabpanel">
             <div class="panel-header">
-              <h2>Sites d'observation</h2>
+              <h2>Sites d’observation</h2>
               <div class="panel-toolbar">
                 <select id="searchSitesColumn" class="search-column-select" title="Colonne de recherche">
                   <option value="nom_du_site">Nom du site</option>
@@ -124,14 +162,20 @@
               <div class="selection-toolbar" data-type="site">
                 <button type="button" class="btn btn-ghost btn-sm" id="btnSiteSelectAll">Tout sélectionner</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btnSiteDeselectAll">Tout désélectionner</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btnSiteInvert">Inverser la sélection</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btnSiteInvert">Inverser</button>
               </div>
             </div>
-            <div class="table-wrapper table-wrapper-integrated">
-              <table class="data-table" id="tableSites">
-                <thead id="theadSites"></thead>
-                <tbody id="tbodySites"></tbody>
-              </table>
+            <div class="table-shell">
+              <div class="table-wrapper table-wrapper-integrated">
+                <table class="data-table" id="tableSites">
+                  <thead id="theadSites"></thead>
+                  <tbody id="tbodySites"></tbody>
+                </table>
+              </div>
+              <div id="emptySites" class="empty-state hidden">
+                <p class="empty-title">Aucun site</p>
+                <p class="empty-text">Modifiez les filtres ou attendez de nouvelles saisies depuis l’app.</p>
+              </div>
             </div>
           </div>
 
@@ -139,15 +183,15 @@
             <div class="panel-header panel-header-map">
               <h2>Carte des données</h2>
               <div class="map-controls">
-                <label for="basemapSelect">Fond :</label>
+                <label for="basemapSelect">Fond</label>
                 <select id="basemapSelect">
                   <option value="osm">OpenStreetMap</option>
                   <option value="satellite">Satellite</option>
                   <option value="topo">Topographique</option>
                   <option value="dark">Sombre</option>
                 </select>
-                <button type="button" class="btn btn-primary btn-sm" id="btnZoomToSelection" title="Zoomer sur les éléments visibles">Zoomer sur la sélection</button>
-                <span id="mapVisibleCount" class="map-visible-count" aria-live="polite">0 observations, 0 sites visibles</span>
+                <button type="button" class="btn btn-primary btn-sm" id="btnZoomToSelection" title="Zoomer sur les éléments visibles">Zoomer</button>
+                <span id="mapVisibleCount" class="map-visible-count" aria-live="polite">0 observations, 0 sites</span>
               </div>
               <div class="map-layer-toggles">
                 <label class="map-checkbox-label"><input type="checkbox" id="mapShowObs" checked /> <span class="legend-dot obs"></span> Observations</label>
@@ -162,10 +206,19 @@
 
     <footer class="footer">
       <div class="footer-inner">
-        <p>Conservatoire d'espaces naturels de Corse — Interface de validation des données naturalistes</p>
+        <p>Conservatoire d’espaces naturels de Corse — Interface de validation</p>
       </div>
     </footer>
   </div>
+
+  <div id="loadingOverlay" class="loading-overlay hidden" aria-live="polite" aria-busy="true">
+    <div class="loading-card">
+      <div class="loading-spinner" aria-hidden="true"></div>
+      <p>Chargement des données…</p>
+    </div>
+  </div>
+
+  <div id="toastStack" class="toast-stack" aria-live="polite"></div>
 
   <div id="lightbox" class="lightbox hidden" role="dialog" aria-modal="true" aria-label="Voir la photo">
     <button type="button" class="lightbox-close" aria-label="Fermer">×</button>
@@ -179,7 +232,7 @@
 
   <div id="exportModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
     <div class="modal export-modal">
-      <h2 id="exportModalTitle" class="modal-title">Confirmer l'export</h2>
+      <h2 id="exportModalTitle" class="modal-title">Confirmer l’export</h2>
       <p class="modal-message" id="exportModalMessage"></p>
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" id="exportModalCancel">Annuler</button>
@@ -192,14 +245,14 @@
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="config.js"></script>
   <script>
-    // Détecter ouverture en file:// : les modules ES ne fonctionnent pas, le formulaire ne réagira pas
     if (window.location.protocol === 'file:') {
       document.body.insertAdjacentHTML('afterbegin',
-        '<div style="position:fixed;inset:0;z-index:9999;background:#1e293b;color:#f8fafc;display:flex;align-items:center;justify-content:center;padding:1.5rem;text-align:center;">' +
-        '<div style="max-width:420px;">' +
-        '<p style="font-size:1.1rem;margin-bottom:1rem;">Cette page doit être ouverte via un serveur HTTP en local, pas en double-cliquant sur le fichier.</p>' +
-        '<p style="margin-bottom:1rem;">Depuis la racine du projet, lancez&nbsp;: <code style="background:#334155;padding:.2em .5em;border-radius:4px;">npx serve validation-web -p 5000</code></p>' +
-        '<p>Puis ouvrez <strong>http://localhost:5000</strong> dans le navigateur.</p>' +
+        '<div class="file-protocol-blocker">' +
+        '<div class="file-protocol-card">' +
+        '<p class="file-protocol-title">Ouvrez cette page via un serveur local</p>' +
+        '<p>Depuis la racine du projet&nbsp;:</p>' +
+        '<code>npx serve validation-web -p 5000</code>' +
+        '<p>Puis ouvrez <strong>http://localhost:5000</strong></p>' +
         '</div></div>');
     }
   </script>
