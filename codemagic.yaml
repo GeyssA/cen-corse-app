@@ -1,10 +1,12 @@
 # Codemagic — CEN Corse (Capacitor + Next export)
 # Doc : https://docs.codemagic.io/yaml-quick-start/building-a-capacitor-app/
 #
-# Avant le 1er build :
-# 1) Remplacer app_store_connect_cen_corse par le nom de ton intégration App Store Connect (Codemagic > Team settings > Integrations).
-# 2) Créer le groupe d’env "cen_corse" avec NEXT_PUBLIC_SUPABASE_URL et NEXT_PUBLIC_SUPABASE_ANON_KEY (Secure).
-# 3) Renseigner APP_STORE_APPLE_ID (numérique, App Store Connect > App > Informations générales > Identifiant Apple).
+# Prérequis Codemagic (app cen-corse-app > Environment variables, groupe cen_corse) :
+# - NEXT_PUBLIC_SUPABASE_URL
+# - NEXT_PUBLIC_SUPABASE_ANON_KEY (Secure)
+# - APPLE_TEAM_ID (10 caractères, developer.apple.com > Membership > Team ID)
+#
+# Team integrations : app_store_connect_cen_corse (clé API App Store Connect)
 
 workflows:
   cencorse-ios-release:
@@ -16,9 +18,6 @@ workflows:
       app_store_connect: app_store_connect_cen_corse
 
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.cencorse.app
       groups:
         - cen_corse
       vars:
@@ -47,18 +46,35 @@ workflows:
       - name: CocoaPods
         script: cd ios/App && pod install
 
+      - name: Keychain
+        script: keychain initialize
+
+      - name: Certificats et profils Apple
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create --verbose
+
+      - name: Ajout certificats au keychain
+        script: keychain add-certificates
+
+      - name: Team ID dans le projet Xcode
+        script: |
+          if [ -z "$APPLE_TEAM_ID" ]; then
+            echo "ERREUR: ajoutez APPLE_TEAM_ID dans Codemagic (groupe cen_corse)."
+            echo "Trouvable sur developer.apple.com > Account > Membership > Team ID"
+            exit 1
+          fi
+          PBX="ios/App/App.xcodeproj/project.pbxproj"
+          sed -i.bak 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBX"
+          perl -i -pe "s/(CODE_SIGN_STYLE = Manual;)/\$1\n\t\t\t\tDEVELOPMENT_TEAM = $APPLE_TEAM_ID;/ unless /DEVELOPMENT_TEAM =/" "$PBX"
+
       - name: Numéro de build iOS
         script: |
           cd ios/App
           LATEST=$(app-store-connect get-latest-build-number "$APP_STORE_APPLE_ID" || echo 0)
           agvtool new-version -all $((LATEST + 1))
 
-      - name: Signature iOS (certificats + profils)
-        script: |
-          keychain initialize
-          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
-          keychain add-certificates
-          xcode-project use-profiles --code-signing-setup-verbose-logging
+      - name: Configuration signature Xcode
+        script: xcode-project use-profiles --code-signing-setup-verbose-logging
 
       - name: IPA App Store
         script: |
