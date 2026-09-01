@@ -5,6 +5,7 @@
 # - NEXT_PUBLIC_SUPABASE_URL
 # - NEXT_PUBLIC_SUPABASE_ANON_KEY (Secure)
 # - APPLE_TEAM_ID (10 caractères, developer.apple.com > Membership > Team ID)
+# - CERTIFICATE_PRIVATE_KEY (optionnel après 1er build réussi — clé RSA du certificat Distribution)
 #
 # Team integrations : app_store_connect_cen_corse (clé API App Store Connect)
 
@@ -51,7 +52,23 @@ workflows:
 
       - name: Certificats et profils Apple
         script: |
-          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create --verbose
+          KEY_PATH="/tmp/ios_distribution_key.pem"
+          if [ -n "$CERTIFICATE_PRIVATE_KEY" ]; then
+            printf '%s\n' "$CERTIFICATE_PRIVATE_KEY" > "$KEY_PATH"
+          else
+            openssl genrsa -out "$KEY_PATH" 2048
+          fi
+          chmod 600 "$KEY_PATH"
+          # Tente création ; si certificat existe déjà, récupère avec la même clé privée
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create \
+            --certificate-key "$KEY_PATH" \
+            --verbose \
+          || app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --certificate-key "$KEY_PATH" \
+            --verbose
 
       - name: Ajout certificats au keychain
         script: keychain add-certificates
