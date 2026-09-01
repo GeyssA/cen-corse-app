@@ -59,15 +59,15 @@ workflows:
             openssl genrsa -out "$KEY_PATH" 2048
           fi
           chmod 600 "$KEY_PATH"
-          # Tente création ; si certificat existe déjà, récupère avec la même clé privée
+          export CERTIFICATE_PRIVATE_KEY="$(cat "$KEY_PATH")"
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create \
-            --certificate-key "$KEY_PATH" \
+            --certificate-key "@file:$KEY_PATH" \
             --verbose \
           || app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
-            --certificate-key "$KEY_PATH" \
+            --certificate-key "@file:$KEY_PATH" \
             --verbose
 
       - name: Ajout certificats au keychain
