@@ -5,7 +5,7 @@
 # - NEXT_PUBLIC_SUPABASE_URL
 # - NEXT_PUBLIC_SUPABASE_ANON_KEY (Secure)
 # - APPLE_TEAM_ID (10 caractères, developer.apple.com > Membership > Team ID)
-# - CERTIFICATE_PRIVATE_KEY (optionnel après 1er build réussi — clé RSA du certificat Distribution)
+# - CERTIFICATE_PRIVATE_KEY (Secure, obligatoire — même clé à chaque build, voir README ci-dessous)
 #
 # Team integrations : app_store_connect_cen_corse (clé API App Store Connect)
 
@@ -53,13 +53,15 @@ workflows:
       - name: Certificats et profils Apple
         script: |
           KEY_PATH="/tmp/ios_distribution_key.pem"
-          if [ -n "$CERTIFICATE_PRIVATE_KEY" ]; then
-            printf '%s\n' "$CERTIFICATE_PRIVATE_KEY" > "$KEY_PATH"
-          else
-            openssl genrsa -out "$KEY_PATH" 2048
+          if [ -z "$CERTIFICATE_PRIVATE_KEY" ]; then
+            echo "ERREUR: variable CERTIFICATE_PRIVATE_KEY manquante dans Codemagic (groupe cen_corse, Secure)."
+            echo "1) Générez une clé: openssl genrsa -out ios_distribution_key.pem 2048"
+            echo "2) Copiez tout le fichier .pem dans CERTIFICATE_PRIVATE_KEY"
+            echo "3) Sur developer.apple.com > Certificates, révoquez les certificats Distribution orphelins"
+            exit 1
           fi
+          printf '%b' "$CERTIFICATE_PRIVATE_KEY" > "$KEY_PATH"
           chmod 600 "$KEY_PATH"
-          export CERTIFICATE_PRIVATE_KEY="$(cat "$KEY_PATH")"
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create \
