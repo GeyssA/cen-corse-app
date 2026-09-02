@@ -45,5 +45,30 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>CEN Corse utilise votre position pour enregistrer et afficher vos observations sur la carte.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>CEN Corse utilise votre position pour enregistrer et afficher vos observations sur la carte.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>CEN Corse a besoin de l’appareil photo pour joindre des photos à vos observations.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>CEN Corse a besoin d’accéder à vos photos pour les joindre à vos observations.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>CEN Corse peut enregistrer des photos liées à vos observations.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>CEN Corse utilise le micro pour la saisie vocale des observations.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.cencorse.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>cencorse</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
