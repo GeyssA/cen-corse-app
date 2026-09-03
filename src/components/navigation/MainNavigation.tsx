@@ -68,7 +68,7 @@ const MainNavigation = memo(function MainNavigation() {
 
   return (
     <div
-      className={`fixed bottom-0 left-0 right-0 z-40 border-t backdrop-blur-md ${
+      className={`main-navigation fixed bottom-0 left-0 right-0 z-40 border-t backdrop-blur-md ${
         theme === 'light'
           ? 'border-slate-200/80 bg-white/94 shadow-[0_-6px_28px_rgba(30,41,59,0.05)]'
           : 'border-slate-700/40 bg-slate-950/88 shadow-[0_-6px_32px_rgba(0,0,0,0.32)]'

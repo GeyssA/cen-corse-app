@@ -36,9 +36,7 @@ export default function CapacitorStatusBar() {
       try {
         await StatusBar.setBackgroundColor({ color })
         await StatusBar.setStyle({ style })
-        // Edge-to-edge iOS/Android : un seul gestionnaire de safe-area (le CSS),
-        // évite le double décalage avec contentInset / bandeaux système.
-        await StatusBar.setOverlaysWebView({ overlay: true })
+        await StatusBar.setOverlaysWebView({ overlay: false })
         const NavBar = await import('@capgo/capacitor-navigation-bar').then(m => m.NavigationBar).catch(() => null)
         const setNavColor = NavBar?.setNavigationBarColor ?? NavBar?.setColor
         if (setNavColor) {

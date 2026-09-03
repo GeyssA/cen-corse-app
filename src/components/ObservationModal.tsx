@@ -33,6 +33,7 @@ import {
 import ObservationModalGuidedBody from '@/components/ObservationModalGuidedBody'
 import type { ObservationForm } from '@/types/observationForm'
 import SimpleDateInput from '@/components/ui/SimpleDateInput'
+import { useLockMainChrome } from '@/hooks/useLockMainChrome'
 
 export type { ObservationForm }
 
@@ -142,6 +143,7 @@ export default function ObservationModal({
 }: ObservationModalProps) {
   const { theme } = useTheme()
   const { user, profile } = useAuth()
+  useLockMainChrome(isOpen)
   const [form, setForm] = useState<ObservationForm>({
     date: getTodayISO(),
     protocole: 'Données opportunistes',
@@ -938,7 +940,7 @@ export default function ObservationModal({
   return (
     <>
     <div
-      className={`fixed inset-0 z-[100] flex flex-col safe-area-modal ${
+      className={`fixed inset-0 z-[200] flex flex-col safe-area-modal ${
         isLight ? 'bg-slate-50' : 'bg-gray-950'
       }`}
       role="dialog"
@@ -2155,7 +2157,7 @@ export default function ObservationModal({
       </div>
     {useGuided && (
       <div
-        className={`shrink-0 z-20 border-t px-4 sm:px-5 py-3 ${
+        className={`shrink-0 z-20 border-t px-4 sm:px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${
           isLight ? 'border-gray-200 bg-white' : 'border-gray-800 bg-gray-900'
         }`}
       >

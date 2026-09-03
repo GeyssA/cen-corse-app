@@ -12,6 +12,7 @@ import { getAiresForUser, type SiteAire } from '@/lib/siteAires'
 import dynamic from 'next/dynamic'
 import ObservationModal from '@/components/ObservationModal'
 import AddSiteModal from '@/components/AddSiteModal'
+import { useLockMainChrome } from '@/hooks/useLockMainChrome'
 
 const CORSICA_CENTER: [number, number] = [42.1, 9.1]
 const DEFAULT_ZOOM = 8
@@ -78,6 +79,7 @@ function isPersistedUuid(id: string | undefined): boolean {
 export default function ObservationsSitesMapModal({ isOpen, onClose }: ObservationsSitesMapModalProps) {
   const { theme } = useTheme()
   const { user } = useAuth()
+  useLockMainChrome(isOpen)
   const [points, setPoints] = useState<MapPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -273,7 +275,7 @@ export default function ObservationsSitesMapModal({ isOpen, onClose }: Observati
   })()
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-black/60 backdrop-blur-sm safe-area-modal">
+    <div className="fixed inset-0 z-[200] flex flex-col bg-black/60 backdrop-blur-sm safe-area-modal">
       <div
         className={`flex items-center justify-between px-4 py-3 border-b shrink-0 ${
           isLight ? 'bg-white border-gray-200' : 'bg-gray-900 border-gray-700'

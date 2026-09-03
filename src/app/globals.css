@@ -121,13 +121,18 @@ body.auth-needs-scroll .scroll-container.scroll-container-auth {
   min-height: 100dvh;
 }
 
-/* Modales pleine page : réserve notch / home indicator uniquement (pas de fallback forcé) */
+/* Modales pleine page : bandeaux système les moins hauts possible */
 .safe-area-modal {
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-top: env(safe-area-inset-top, 20px);
+  padding-bottom: env(safe-area-inset-bottom, 32px);
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
-  box-sizing: border-box;
+}
+
+/* Masque la barre d’onglets quand une modale plein écran est ouverte (carte, obs, site…) */
+body.fullscreen-overlay-open .main-navigation {
+  display: none !important;
+  pointer-events: none !important;
 }
 
 /* Désactiver le pull-to-refresh et le zoom sur PWA */

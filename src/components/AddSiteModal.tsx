@@ -16,6 +16,7 @@ import { choiceCheckIcon, choiceChipSelected, choiceChipUnselected, choiceListRo
 import MapPickModal from '@/components/MapPickModal'
 import MapLinePickModal, { type LinePickResult } from '@/components/MapLinePickModal'
 import SimpleDateInput from '@/components/ui/SimpleDateInput'
+import { useLockMainChrome } from '@/hooks/useLockMainChrome'
 
 const PROTOCOLE_OPTIONS = [
   { value: 'POPReptile', label: 'POP Reptile' },
@@ -38,6 +39,7 @@ interface AddSiteModalProps {
 
 export default function AddSiteModal({ isOpen, onClose, onSuccess, editingSite = null }: AddSiteModalProps) {
   const { theme } = useTheme()
+  useLockMainChrome(isOpen)
   const { user } = useAuth()
   const [date, setDate] = useState(getTodayISO())
   const [protocole, setProtocole] = useState('')
@@ -485,7 +487,7 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess, editingSite =
 
   return (
     <>
-    <div className={`fixed inset-0 z-[100] flex flex-col safe-area-modal ${isLight ? 'bg-slate-50' : 'bg-gray-950'}`} role="dialog" aria-modal="true" aria-labelledby="add-site-modal-title">
+    <div className={`fixed inset-0 z-[200] flex flex-col safe-area-modal ${isLight ? 'bg-slate-50' : 'bg-gray-950'}`} role="dialog" aria-modal="true" aria-labelledby="add-site-modal-title">
       <div className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden">
         <div className={`relative w-full min-h-full ${isLight ? 'bg-white border-gray-200' : 'bg-gray-900 border-gray-700'}`}>
         <header className={`sticky top-0 z-10 flex flex-col gap-0 border-b ${isLight ? 'border-gray-200 bg-white' : 'border-gray-700 bg-gray-900'}`}>
