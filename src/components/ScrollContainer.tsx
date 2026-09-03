@@ -5,7 +5,7 @@ import { useLayoutEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 
 const scrollContainerStyle = {
-  minHeight: '100vh',
+  minHeight: '100dvh',
   height: '100%',
   overflowY: 'auto' as const,
   overflowX: 'hidden' as const,
@@ -16,7 +16,7 @@ const scrollContainerStyle = {
 
 /** Page auth : scroll possible (nécessaire pour le formulaire création de compte) */
 const authContainerStyle = {
-  minHeight: '100vh',
+  minHeight: '100dvh',
   height: '100%',
   overflowY: 'auto' as const,
   overflowX: 'hidden' as const,

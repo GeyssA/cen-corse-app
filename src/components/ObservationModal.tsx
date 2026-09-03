@@ -2155,7 +2155,7 @@ export default function ObservationModal({
       </div>
     {useGuided && (
       <div
-        className={`shrink-0 z-20 border-t px-4 sm:px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${
+        className={`shrink-0 z-20 border-t px-4 sm:px-5 py-3 ${
           isLight ? 'border-gray-200 bg-white' : 'border-gray-800 bg-gray-900'
         }`}
       >

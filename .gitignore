@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Clé de signature iOS (ne jamais committer)
+ios_distribution_key.pem
+
 # vercel
 .vercel
 

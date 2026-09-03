@@ -30,9 +30,11 @@ const config: CapacitorConfig = {
     }
   },
   // Schéma custom pour le retour OAuth (PKCE) : cencorse://auth/callback — doit matcher Info.plist / Xcode.
+  // contentInset: never — laisse le CSS (safe-area-inset-*) gérer notch / home indicator.
+  // Avec "automatic", iOS + CSS se cumulent → bandeaux vides et boutons masqués.
   ios: {
     scheme: 'cencorse',
-    contentInset: 'automatic',
+    contentInset: 'never',
   },
   plugins: {
     SplashScreen: {
@@ -46,9 +48,10 @@ const config: CapacitorConfig = {
       splashImmersive: false
     },
     StatusBar: {
-      backgroundColor: "#1e3a8a",
-      style: "dark",
-      overlaysWebView: false
+      backgroundColor: "#111827",
+      style: "DARK",
+      // Edge-to-edge : le bandeau app peint sous la barre système via safe-area
+      overlaysWebView: true
     }
   }
 };
