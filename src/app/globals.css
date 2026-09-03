@@ -129,10 +129,13 @@ body.auth-needs-scroll .scroll-container.scroll-container-auth {
   padding-right: env(safe-area-inset-right, 0px);
 }
 
-/* Masque la barre d’onglets quand une modale plein écran est ouverte (carte, obs, site…) */
-body.fullscreen-overlay-open .main-navigation {
+/* Masque chrome principal (onglets + bandeau logo) sous les modales plein écran —
+   sinon sur iOS le bandeau reste au-dessus et cache la croix de fermeture. */
+body.fullscreen-overlay-open .main-navigation,
+body.fullscreen-overlay-open .app-header-bar {
   display: none !important;
   pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 /* Désactiver le pull-to-refresh et le zoom sur PWA */

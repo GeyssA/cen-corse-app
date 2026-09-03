@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
 import {
@@ -937,7 +938,7 @@ export default function ObservationModal({
     }
   }
 
-  return (
+  return createPortal(
     <>
     <div
       className={`fixed inset-0 z-[200] flex flex-col safe-area-modal ${
@@ -2311,6 +2312,7 @@ export default function ObservationModal({
         setShowMapPicker(false)
       }}
     />
-    </>
+    </>,
+    document.body
   )
 }

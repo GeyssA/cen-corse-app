@@ -5,8 +5,9 @@ import { useEffect } from 'react'
 const ATTR = 'data-fullscreen-overlays'
 
 /**
- * Masque la barre d’onglets (et évite qu’elle reste visible sous les modales
- * plein écran iOS/Android) tant que le overlay est actif.
+ * Masque le chrome principal (barre d’onglets + bandeau logo/profil)
+ * tant qu’une modale plein écran est ouverte — indispensable sur iOS où
+ * le bandeau peut rester au-dessus et cacher la croix de fermeture.
  * Compteur : plusieurs modales empilées (carte → observation) restent correctes.
  */
 export function useLockMainChrome(active: boolean) {

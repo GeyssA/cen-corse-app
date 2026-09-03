@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { getObservationsByUser, deleteObservation, type Observation } from '@/lib/observations'
@@ -274,7 +275,7 @@ export default function ObservationsSitesMapModal({ isOpen, onClose }: Observati
     return CORSICA_CENTER
   })()
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[200] flex flex-col bg-black/60 backdrop-blur-sm safe-area-modal">
       <div
         className={`flex items-center justify-between px-4 py-3 border-b shrink-0 ${
@@ -403,7 +404,8 @@ export default function ObservationsSitesMapModal({ isOpen, onClose }: Observati
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   )
 }
 

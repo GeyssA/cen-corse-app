@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { createSite, getSitesByUser, updateSite, type ObservationSite } from '@/lib/sites'
@@ -485,7 +486,7 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess, editingSite =
 
   if (!isOpen) return null
 
-  return (
+  return createPortal(
     <>
     <div className={`fixed inset-0 z-[200] flex flex-col safe-area-modal ${isLight ? 'bg-slate-50' : 'bg-gray-950'}`} role="dialog" aria-modal="true" aria-labelledby="add-site-modal-title">
       <div className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden">
@@ -1031,6 +1032,7 @@ export default function AddSiteModal({ isOpen, onClose, onSuccess, editingSite =
           setShowLinePicker(false)
         }}
       />
-    </>
+    </>,
+    document.body
   )
 }
