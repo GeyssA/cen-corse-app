@@ -13,6 +13,7 @@ import DisplayNameGate from "@/components/auth/DisplayNameGate";
 import NativeAuthDeepLink from "@/components/auth/NativeAuthDeepLink";
 import AppUpdateModal from "@/components/AppUpdateModal";
 import ThemePreferenceModal from "@/components/ThemePreferenceModal";
+import IosInputZoomFix from "@/components/IosInputZoomFix";
 // import Script from "next/script";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -103,6 +104,7 @@ export default function RootLayout({
       </head>
       <body className={`${ibmPlexSans.variable} ${inter.variable} antialiased`}>
         <NoPullToRefresh />
+        <IosInputZoomFix />
         {process.env.NODE_ENV === 'production' && (
           <script src="/vercel-disable.js" defer></script>
         )}

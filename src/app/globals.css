@@ -576,7 +576,8 @@ body.light-theme .font-title {
   border: 1px solid rgba(59, 130, 246, 0.2);
   border-radius: var(--radius-md);
   padding: 0.875rem 1rem;
-  font-size: 0.875rem;
+  /* ≥16px : empêche le zoom auto iOS au focus */
+  font-size: 1rem;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: var(--shadow-sm);
   color: var(--foreground) !important;
@@ -603,6 +604,9 @@ input[type="number"],
 input[type="tel"],
 input[type="url"],
 input[type="search"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
 textarea,
 select {
   color: var(--foreground) !important;
@@ -610,7 +614,8 @@ select {
   border: 1px solid rgba(59, 130, 246, 0.2) !important;
   border-radius: var(--radius-md) !important;
   padding: 0.875rem 1rem !important;
-  font-size: 0.875rem !important;
+  /* ≥16px obligatoire : sinon iOS zoome au focus et maximum-scale=1 empêche de dézoomer */
+  font-size: 16px !important;
   font-family: inherit !important;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   box-shadow: var(--shadow-sm) !important;
