@@ -35,3 +35,19 @@ CREATE POLICY "anon_update_observation_sites"
   TO anon
   USING (true)
   WITH CHECK (true);
+
+-- Suppression depuis la page de validation (clé anon)
+DROP POLICY IF EXISTS "anon_delete_observations" ON public.observations;
+DROP POLICY IF EXISTS "anon_delete_observation_sites" ON public.observation_sites;
+
+CREATE POLICY "anon_delete_observations"
+  ON public.observations
+  FOR DELETE
+  TO anon
+  USING (true);
+
+CREATE POLICY "anon_delete_observation_sites"
+  ON public.observation_sites
+  FOR DELETE
+  TO anon
+  USING (true);

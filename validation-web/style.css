@@ -210,8 +210,18 @@ button, input, select { font-family: inherit; }
 .btn-validate:hover:not(:disabled) { filter: brightness(1.05); }
 .btn-unvalidate { color: var(--text-muted); }
 .btn-unvalidate:hover { color: var(--danger); }
-.cell-actions { display: flex; }
-.cell-actions .btn { white-space: nowrap; }
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+}
+.btn-danger:hover:not(:disabled) { background: #f8e8ea; }
+.btn-danger-solid {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.btn-danger-solid:hover:not(:disabled) { filter: brightness(1.05); }
 
 .data-section.hidden,
 .gate-section.hidden { display: none !important; }
@@ -337,7 +347,20 @@ button, input, select { font-family: inherit; }
   grid-template-columns: minmax(0, 1fr) minmax(420px, 1fr);
   gap: 0.9rem;
   align-items: start;
+  min-width: 0;
 }
+.workspace-main,
+.panels,
+.panel,
+.table-shell,
+.map-pane,
+.map-frame {
+  min-width: 0;
+}
+
+.data-section.is-map-hidden .workspace { grid-template-columns: 1fr; }
+.data-section.is-map-hidden .map-pane { display: none; }
+.data-section:not(.is-map-hidden) #btnShowMap { display: none; }
 
 .data-section.is-map-focus .workspace { grid-template-columns: 1fr; }
 .data-section.is-map-focus .workspace-main { display: none; }
@@ -459,7 +482,18 @@ button, input, select { font-family: inherit; }
 .data-table tbody tr.row-flash { animation: rowFlash 0.7s var(--ease); }
 .data-table .cell-select { width: 2.4rem; text-align: center; }
 .data-table .cell-select input { width: 0.95rem; height: 0.95rem; accent-color: var(--primary); cursor: pointer; }
-.data-table td.cell-actions { white-space: nowrap; gap: 0.3rem; }
+.data-table th.col-actions,
+.data-table td.cell-actions {
+  text-align: center;
+  vertical-align: middle;
+}
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
 
 .cell-photo-btn { display: inline-flex; gap: 2px; padding: 0; border: none; background: none; cursor: pointer; }
 .cell-photo-btn img {
@@ -489,6 +523,7 @@ button, input, select { font-family: inherit; }
 .empty-text { margin: 0; color: var(--text-muted); }
 
 .map-pane {
+  overflow: hidden;
   position: sticky;
   top: calc(var(--header-h) + 3.4rem);
   height: calc(100vh - var(--header-h) - 4.6rem);

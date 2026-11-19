@@ -97,7 +97,7 @@ function showToast(message, type = 'success') {
   setTimeout(() => {
     el.classList.add('out')
     setTimeout(() => el.remove(), 260)
-  }, 2200)
+  }, type === 'error' ? 6500 : 2200)
 }
 
 function setLoading(on) {
@@ -501,12 +501,22 @@ function lightboxNext() {
   document.getElementById('lightboxCounter').textContent = (window._lightboxIndex + 1) + ' / ' + window._lightboxUrls.length
 }
 
+function rowActions(record, type) {
+  const id = record.id
+  const locate = `<button type="button" class="btn btn-sm btn-outline btn-locate" data-id="${id}" data-type="${type}" title="Voir sur la carte">Carte</button>`
+  const validate = record.validated
+    ? `<button type="button" class="btn btn-sm btn-ghost btn-unvalidate" data-id="${id}" data-type="${type}" title="Retirer la validation">Retirer</button>`
+    : `<button type="button" class="btn btn-sm btn-validate" data-id="${id}" data-type="${type}">Valider</button>`
+  const remove = `<button type="button" class="btn btn-sm btn-danger btn-delete" data-id="${id}" data-type="${type}" title="Supprimer définitivement">Supprimer</button>`
+  return `<td class="cell-actions"><div class="row-actions">${locate}${validate}${remove}</div></td>`
+}
+
 function renderObservationsTable() {
   const filtered = getFilteredObservations()
   setEmptyState('observation', filtered.length === 0)
   const columns = [
     { key: '_select', label: '', type: 'select', dataType: 'observation' },
-    { key: '_action', label: 'Action', type: 'action', action: 'observation' },
+    { key: '_action', label: 'Action', type: 'action', action: 'observation', thClass: 'col-actions' },
     { key: 'validated', label: 'Statut', type: 'validated' },
     { key: 'nom_espece', label: 'Espèce' },
     { key: 'date', label: 'Date' },
@@ -541,13 +551,7 @@ function renderObservationsTable() {
       if (c.type === 'num') return `<td class="cell-numeric">${o[c.key] != null ? Number(o[c.key]).toFixed(5) : '—'}</td>`
       if (c.type === 'date') return `<td class="cell-date">${formatDate(o[c.key])}</td>`
       if (c.type === 'validated') return validatedCell(!!o.validated)
-      if (c.type === 'action' && c.action === 'observation') {
-        const locate = `<button type="button" class="btn btn-sm btn-outline btn-locate" data-id="${o.id}" data-type="observation" title="Voir sur la carte">Carte</button>`
-        if (o.validated) {
-          return `<td class="cell-actions">${locate}<button type="button" class="btn btn-sm btn-ghost btn-unvalidate" data-id="${o.id}" data-type="observation" title="Retirer la validation">Retirer</button></td>`
-        }
-        return `<td class="cell-actions">${locate}<button type="button" class="btn btn-sm btn-validate" data-id="${o.id}" data-type="observation">Valider</button></td>`
-      }
+      if (c.type === 'action' && c.action === 'observation') return rowActions(o, 'observation')
       const val = o[c.key]
       if (c.key === 'nom_espece') return `<td class="cell-species">${speciesHtml(val)}</td>`
       if (c.key === 'date') return `<td class="cell-date">${escapeHtml(formatFieldDate(val))}</td>`
@@ -577,6 +581,9 @@ function renderObservationsTable() {
   tbodyObservations.querySelectorAll('.btn-unvalidate').forEach(btn => {
     btn.addEventListener('click', () => unvalidateRow(btn.dataset.id, 'observation'))
   })
+  tbodyObservations.querySelectorAll('.btn-delete').forEach(btn => {
+    btn.addEventListener('click', () => openDeleteModal(btn.dataset.id, btn.dataset.type))
+  })
   tbodyObservations.querySelectorAll('.cell-photo-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.id
@@ -601,7 +608,7 @@ function renderSitesTable() {
   setEmptyState('site', filtered.length === 0)
   const columns = [
     { key: '_select', label: '', type: 'select', dataType: 'site' },
-    { key: '_action', label: 'Action', type: 'action', action: 'site' },
+    { key: '_action', label: 'Action', type: 'action', action: 'site', thClass: 'col-actions' },
     { key: 'validated', label: 'Statut', type: 'validated' },
     { key: 'nom_du_site', label: 'Nom du site' },
     { key: 'date', label: 'Date' },
@@ -627,13 +634,7 @@ function renderSitesTable() {
       if (c.type === 'num') return `<td class="cell-numeric">${s[c.key] != null ? Number(s[c.key]).toFixed(c.key === 'length_meters' ? 1 : 5) : '—'}</td>`
       if (c.type === 'date') return `<td class="cell-date">${formatDate(s[c.key])}</td>`
       if (c.type === 'validated') return validatedCell(!!s.validated)
-      if (c.type === 'action' && c.action === 'site') {
-        const locate = `<button type="button" class="btn btn-sm btn-outline btn-locate" data-id="${s.id}" data-type="site" title="Voir sur la carte">Carte</button>`
-        if (s.validated) {
-          return `<td class="cell-actions">${locate}<button type="button" class="btn btn-sm btn-ghost btn-unvalidate" data-id="${s.id}" data-type="site" title="Retirer la validation">Retirer</button></td>`
-        }
-        return `<td class="cell-actions">${locate}<button type="button" class="btn btn-sm btn-validate" data-id="${s.id}" data-type="site">Valider</button></td>`
-      }
+      if (c.type === 'action' && c.action === 'site') return rowActions(s, 'site')
       if (c.key === 'date') return `<td class="cell-date">${escapeHtml(formatFieldDate(s[c.key]))}</td>`
       if (c.key === 'nom_du_site') return `<td>${s[c.key] != null && s[c.key] !== '' ? escapeHtml(s[c.key]) : '—'}</td>`
       return `<td>${s[c.key] != null && s[c.key] !== '' ? escapeHtml(s[c.key]) : '—'}</td>`
@@ -657,6 +658,9 @@ function renderSitesTable() {
   })
   tbodySites.querySelectorAll('.btn-unvalidate').forEach(btn => {
     btn.addEventListener('click', () => unvalidateRow(btn.dataset.id, 'site'))
+  })
+  tbodySites.querySelectorAll('.btn-delete').forEach(btn => {
+    btn.addEventListener('click', () => openDeleteModal(btn.dataset.id, btn.dataset.type))
   })
   tbodySites.querySelectorAll('.cell-photo-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -987,9 +991,31 @@ function zoomMapToFiltered(kind) {
   fitMap(pts, 12)
 }
 
+const MAP_VIS_KEY = 'cen_validation_map_visible'
+
+function setMapVisible(on, { persist = true } = {}) {
+  const section = document.getElementById('dataSection')
+  if (!section) return
+  if (!on && section.classList.contains('is-map-focus')) {
+    section.classList.remove('is-map-focus')
+    document.querySelectorAll('.tab').forEach((t) => {
+      const active = t.dataset.tab === 'observations'
+      t.classList.toggle('active', active)
+      t.setAttribute('aria-selected', active ? 'true' : 'false')
+    })
+    document.getElementById('panelObservations')?.classList.add('active')
+    document.getElementById('panelSites')?.classList.remove('active')
+  }
+  section.classList.toggle('is-map-hidden', !on)
+  if (persist) sessionStorage.setItem(MAP_VIS_KEY, on ? '1' : '0')
+  if (on) setTimeout(() => { updateMap(); mapInstance?.invalidateSize() }, 80)
+}
+
 function focusRecord(type, id) {
   const key = String(id || '')
   if (!key) return
+  const section = document.getElementById('dataSection')
+  if (section?.classList.contains('is-map-hidden')) setMapVisible(true)
   const toggle = document.getElementById(type === 'observation' ? 'mapShowObs' : 'mapShowSites')
   if (toggle && !toggle.checked) toggle.checked = true
   const narrow = window.matchMedia('(max-width: 1100px)').matches
@@ -1043,6 +1069,7 @@ function activateTab(tabName, { zoom = false } = {}) {
       (id === 'panelSites' && tabName === 'sites')
     p.classList.toggle('active', active)
   })
+  if (tabName === 'map') document.getElementById('dataSection')?.classList.remove('is-map-hidden')
   document.getElementById('dataSection')?.classList.toggle('is-map-focus', tabName === 'map')
   syncViewState()
   setTimeout(() => {
@@ -1275,6 +1302,65 @@ bindSelectionToolbar()
 const btnRefresh = document.getElementById('btnRefresh')
 if (btnRefresh) btnRefresh.addEventListener('click', () => loadData())
 
+const btnShowMap = document.getElementById('btnShowMap')
+const btnHideMap = document.getElementById('btnHideMap')
+if (btnShowMap) btnShowMap.addEventListener('click', () => setMapVisible(true))
+if (btnHideMap) btnHideMap.addEventListener('click', () => setMapVisible(false))
+if (sessionStorage.getItem(MAP_VIS_KEY) === '0') setMapVisible(false, { persist: false })
+
+let pendingDelete = null
+
+function openDeleteModal(id, type) {
+  const record = type === 'observation'
+    ? observations.find((x) => x.id === id)
+    : sites.find((x) => x.id === id)
+  const label = type === 'observation'
+    ? (record?.nom_espece || 'cette observation')
+    : (record?.nom_du_site || 'ce site')
+  pendingDelete = { id, type }
+  const message = document.getElementById('deleteModalMessage')
+  if (message) {
+    message.textContent = type === 'observation'
+      ? `Supprimer définitivement l’observation « ${label} » ? Cette action est irréversible.`
+      : `Supprimer définitivement le site « ${label} » ? Cette action est irréversible.`
+  }
+  document.getElementById('deleteModal')?.classList.remove('hidden')
+}
+
+function closeDeleteModal() {
+  document.getElementById('deleteModal')?.classList.add('hidden')
+  pendingDelete = null
+}
+
+async function confirmDeleteModal() {
+  if (!pendingDelete) return
+  const { id, type } = pendingDelete
+  const table = type === 'observation' ? 'observations' : 'observation_sites'
+  const confirmBtn = document.getElementById('deleteModalConfirm')
+  if (confirmBtn) confirmBtn.disabled = true
+  const { data, error } = await supabase.from(table).delete().eq('id', id).select('id')
+  if (confirmBtn) confirmBtn.disabled = false
+  if (error || !data || data.length === 0) {
+    console.error('Suppression:', error)
+    showToast('Suppression refusée par la base. Exécutez validation-web/supabase-rls-anon.sql dans Supabase.', 'error')
+    return
+  }
+  if (type === 'observation') {
+    observations = observations.filter((o) => o.id !== id)
+    selectedObsIds.delete(id)
+  } else {
+    sites = sites.filter((s) => s.id !== id)
+    selectedSiteIds.delete(id)
+  }
+  closeDeleteModal()
+  renderObservationsTable()
+  renderSitesTable()
+  updateMap()
+  updateTabCounts()
+  updateStats()
+  showToast(type === 'observation' ? 'Observation supprimée' : 'Site supprimé')
+}
+
 function bindSelectionToolbar() {
   const byId = (id) => document.getElementById(id)
   if (byId('btnObsSelectAll')) byId('btnObsSelectAll').addEventListener('click', selectAllObservation)
@@ -1295,6 +1381,13 @@ const exportModalCancel = document.getElementById('exportModalCancel')
 if (exportModalConfirm) exportModalConfirm.addEventListener('click', confirmExportModal)
 if (exportModalCancel) exportModalCancel.addEventListener('click', closeExportModal)
 if (exportModal) exportModal.addEventListener('click', (e) => { if (e.target === exportModal) closeExportModal() })
+
+const deleteModal = document.getElementById('deleteModal')
+const deleteModalConfirm = document.getElementById('deleteModalConfirm')
+const deleteModalCancel = document.getElementById('deleteModalCancel')
+if (deleteModalConfirm) deleteModalConfirm.addEventListener('click', confirmDeleteModal)
+if (deleteModalCancel) deleteModalCancel.addEventListener('click', closeDeleteModal)
+if (deleteModal) deleteModal.addEventListener('click', (e) => { if (e.target === deleteModal) closeDeleteModal() })
 
 if (isAccessGranted()) {
   showApp()
