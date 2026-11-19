@@ -1,0 +1,59 @@
+diff --git a/node_modules/@capacitor-community/apple-sign-in/ios/Sources/SignInWithApple/Plugin.swift b/node_modules/@capacitor-community/apple-sign-in/ios/Sources/SignInWithApple/Plugin.swift
+index f53087c..bde9ca8 100644
+--- a/node_modules/@capacitor-community/apple-sign-in/ios/Sources/SignInWithApple/Plugin.swift
++++ b/node_modules/@capacitor-community/apple-sign-in/ios/Sources/SignInWithApple/Plugin.swift
+@@ -10,6 +10,9 @@ public class SignInWithApple: CAPPlugin, CAPBridgedPlugin {
+         CAPPluginMethod(name: "authorize", returnType: CAPPluginReturnPromise),
+     ]
+ 
++    // Conservé : sinon le contrôleur est libéré avant la feuille, surtout sur iPad.
++    private var authorizationController: ASAuthorizationController?
++
+     @objc func authorize(_ call: CAPPluginCall) {
+         let appleIDProvider = ASAuthorizationAppleIDProvider()
+         let request = appleIDProvider.createRequest()
+@@ -24,7 +27,11 @@ public class SignInWithApple: CAPPlugin, CAPBridgedPlugin {
+ 
+         let authorizationController = ASAuthorizationController(authorizationRequests: [request])
+         authorizationController.delegate = self
+-        authorizationController.performRequests()
++        authorizationController.presentationContextProvider = self
++        self.authorizationController = authorizationController
++        DispatchQueue.main.async {
++            authorizationController.performRequests()
++        }
+     }
+ 
+     func getRequestedScopes(from call: CAPPluginCall) -> [ASAuthorization.Scope]? {
+@@ -70,6 +77,7 @@ extension SignInWithApple: ASAuthorizationControllerDelegate {
+         ]
+ 
+         call.resolve(result)
++        self.authorizationController = nil
+         self.bridge?.releaseCall(call)
+     }
+ 
+@@ -80,6 +88,23 @@ extension SignInWithApple: ASAuthorizationControllerDelegate {
+             return
+         }
+         call.reject(error.localizedDescription)
++        self.authorizationController = nil
+         self.bridge?.releaseCall(call)
+     }
+ }
++
++extension SignInWithApple: ASAuthorizationControllerPresentationContextProviding {
++    public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
++        if let window = self.bridge?.webView?.window {
++            return window
++        }
++        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
++        if let window = scenes.flatMap({ $0.windows }).first(where: { $0.isKeyWindow }) {
++            return window
++        }
++        if let window = scenes.first?.windows.first {
++            return window
++        }
++        return UIWindow()
++    }
++}

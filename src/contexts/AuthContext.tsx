@@ -4,12 +4,24 @@ import React, { createContext, useContext, useEffect, useState, useRef } from 'r
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { getProfile, saveProfileToStorage, Profile, AuthState } from '@/lib/auth'
+import { Capacitor } from '@capacitor/core'
 import { getOAuthRedirectUrl } from '@/lib/auth-callback-url'
-import { isCapacitorShell } from '@/lib/geolocation'
+import { isCapacitorNative, isCapacitorShell } from '@/lib/geolocation'
 
 // Cache simple pour les profils utilisateur (persiste tant que la session est active)
 const profileCache = new Map<string, { profile: Profile; timestamp: number }>()
 const PROFILE_CACHE_TTL = Infinity // Pas d'expiration - le cache reste jusqu'à déconnexion
+
+function randomNonce(length = 32): string {
+  const bytes = new Uint8Array(length)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
 
 /** Profil minimal si l’API ne renvoie rien (réseau, 1ère install) : indispensable pour l’onboarding + modale nom. */
 function defaultProfileForUserId(userId: string): Profile {
@@ -295,7 +307,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signInWithGoogle = async () => signInWithOAuthProvider('google')
-  const signInWithApple = async () => signInWithOAuthProvider('apple')
+
+  const signInWithAppleNative = async () => {
+    try {
+      const { SignInWithApple } = await import('@capacitor-community/apple-sign-in')
+      const rawNonce = randomNonce()
+      const hashedNonce = await sha256Hex(rawNonce)
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+
+      const result = await SignInWithApple.authorize({
+        clientId: 'com.cencorse.app',
+        redirectURI: `${supabaseUrl}/auth/v1/callback`,
+        scopes: 'email name',
+        nonce: hashedNonce,
+      })
+
+      const identityToken = result.response?.identityToken
+      if (!identityToken) {
+        return { error: { message: 'Apple n’a pas renvoyé de jeton.' } }
+      }
+
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: identityToken,
+        nonce: rawNonce,
+      })
+      if (error) return { error }
+
+      const fullName = [result.response.givenName, result.response.familyName]
+        .filter(Boolean)
+        .join(' ')
+        .trim()
+      if (fullName && data.user) {
+        await supabase.auth.updateUser({ data: { full_name: fullName } }).catch(() => undefined)
+      }
+
+      if (data.user) {
+        setUser(data.user)
+        const userProfile = await getCachedProfile(data.user.id)
+        setProfile(userProfile)
+      }
+
+      return { error: null }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Connexion Apple indisponible.'
+      const cancelled = /cancel|annul|1001/i.test(message)
+      return { error: { message: cancelled ? 'Connexion Apple annulée.' : message } }
+    }
+  }
+
+  const signInWithApple = async () => {
+    if (isCapacitorNative() && Capacitor.getPlatform() === 'ios') {
+      return signInWithAppleNative()
+    }
+    return signInWithOAuthProvider('apple')
+  }
 
   const signUp = async (email: string, password: string, fullName: string, accountType: 'employee' | 'external' | 'visitor') => {
     const redirectUrl = typeof window !== 'undefined' 

@@ -155,8 +155,9 @@ export default function LoginForm({ onSwitchToSignUp, onSwitchToForgotPassword }
                 try {
                   const result = await signInWithApple()
                   if (result?.error) {
-                    setUserFriendlyError('Connexion Apple annulée ou indisponible.')
-                    setError(String((result.error as { message?: string })?.message ?? ''))
+                    const message = String((result.error as { message?: string })?.message ?? '')
+                    setError(message)
+                    setUserFriendlyError(message || 'Connexion Apple indisponible.')
                   }
                 } catch {
                   setUserFriendlyError('Connexion Apple indisponible.')
