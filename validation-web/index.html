@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Validation des données — CEN Corse</title>
+  <title>Registre de validation — CEN Corse</title>
   <link rel="icon" type="image/png" href="assets/Logo_CENCorse-removebg-preview.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
@@ -22,8 +22,8 @@
             <img src="assets/Logo_CENCorse-removebg-preview.png" alt="CEN Corse" class="header-logo" />
           </div>
           <div class="brand-text">
-            <h1 class="logo">Validation des données</h1>
-            <p class="logo-sub">CEN Corse · naturalistes</p>
+            <p class="eyebrow">Conservatoire d’espaces naturels de Corse</p>
+            <h1 class="logo">Registre de validation</h1>
           </div>
         </div>
         <div class="header-actions" id="headerActions"></div>
@@ -32,25 +32,21 @@
 
     <main class="main">
       <section id="loginSection" class="gate-section">
-        <div class="gate-bg" aria-hidden="true">
-          <span class="gate-glow gate-glow-1"></span>
-          <span class="gate-glow gate-glow-2"></span>
-          <span class="gate-grid"></span>
-        </div>
         <div class="gate-card">
           <div class="gate-brand">
             <div class="gate-logo-bg">
               <img src="assets/Logo_CENCorse-removebg-preview.png" alt="CEN Corse" class="gate-logo" />
             </div>
           </div>
-          <h2>Interface de validation</h2>
-          <p class="gate-hint">Saisissez le code d’accès pour consulter et valider les observations et sites.</p>
+          <p class="eyebrow eyebrow-center">Données naturalistes</p>
+          <h2>Accès au registre</h2>
+          <p class="gate-hint">Consultez les observations et les sites saisis sur le terrain, repérez-les sur la carte, puis validez-les.</p>
           <form id="loginForm" class="gate-form">
             <label for="accessCode">Code d’accès</label>
             <input type="password" id="accessCode" inputmode="numeric" autocomplete="off" placeholder="•••••" maxlength="10" />
             <p id="loginError" class="gate-error" aria-live="polite"></p>
             <button type="submit" class="btn btn-primary btn-block" id="loginSubmit">
-              <span>Accéder</span>
+              <span>Entrer</span>
             </button>
           </form>
         </div>
@@ -58,20 +54,21 @@
 
       <section id="dataSection" class="data-section hidden">
         <div class="stats-row" id="statsRow" aria-live="polite">
-          <div class="stat-card">
-            <span class="stat-value" id="statPending">—</span>
-            <span class="stat-label">À valider</span>
-          </div>
-          <div class="stat-card stat-card-ok">
-            <span class="stat-value" id="statValidated">—</span>
-            <span class="stat-label">Validées</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-value" id="statTotal">—</span>
-            <span class="stat-label">Total</span>
-          </div>
-          <button type="button" class="btn btn-outline btn-sm btn-refresh" id="btnRefresh" title="Actualiser les données">
-            Actualiser
+          <button type="button" class="stat-card" data-jump="observations:pending">
+            <span class="stat-value" id="statObsPending">—</span>
+            <span class="stat-label">Observations à valider</span>
+          </button>
+          <button type="button" class="stat-card stat-card-ok" data-jump="observations:validated">
+            <span class="stat-value" id="statObsOk">—</span>
+            <span class="stat-label">Observations validées</span>
+          </button>
+          <button type="button" class="stat-card" data-jump="sites:pending">
+            <span class="stat-value" id="statSitesPending">—</span>
+            <span class="stat-label">Sites à valider</span>
+          </button>
+          <button type="button" class="stat-card stat-card-ok" data-jump="sites:validated">
+            <span class="stat-value" id="statSitesOk">—</span>
+            <span class="stat-label">Sites validés</span>
           </button>
         </div>
 
@@ -86,102 +83,123 @@
               <span class="tab-count" id="tabCountSites">0</span>
             </button>
             <button type="button" class="tab" data-tab="map" aria-selected="false">
-              <span class="tab-label">Carte</span>
+              <span class="tab-label">Carte seule</span>
             </button>
           </div>
           <div class="toolbar-actions">
-            <select id="filterValidated" class="filter-validated" title="Afficher tout ou validées uniquement">
-              <option value="all">Tout</option>
+            <div class="seg" role="group" aria-label="Filtrer par statut">
+              <button type="button" class="seg-btn is-active" data-filter="all">Toutes</button>
+              <button type="button" class="seg-btn" data-filter="pending">À valider</button>
+              <button type="button" class="seg-btn" data-filter="validated">Validées</button>
+            </div>
+            <select id="filterValidated" class="sr-only" title="Afficher tout ou validées uniquement">
+              <option value="all" selected>Tout</option>
               <option value="validated">Validées uniquement</option>
               <option value="pending">À valider uniquement</option>
             </select>
-            <button type="button" class="btn btn-outline" id="btnExportAll" title="Exporter toutes les données en .csv">Exporter tout</button>
-            <button type="button" class="btn btn-success" id="btnExportValidated" title="Exporter uniquement les données validées">Exporter validées</button>
+            <button type="button" class="btn btn-outline btn-sm" id="btnRefresh" title="Recharger les données">Actualiser</button>
+            <button type="button" class="btn btn-outline btn-sm" id="btnExportValidated" title="Exporter uniquement les données validées">CSV validé</button>
+            <button type="button" class="btn btn-outline btn-sm" id="btnExportAll" title="Exporter toutes les données en .csv">CSV complet</button>
           </div>
         </div>
 
         <p id="dataHint" class="data-hint hidden" role="status"></p>
 
-        <div class="panels">
-          <div id="panelObservations" class="panel active" role="tabpanel">
-            <div class="panel-header">
-              <h2>Observations naturalistes</h2>
-              <div class="panel-toolbar">
-                <select id="searchObsColumn" class="search-column-select" title="Colonne de recherche">
-                  <option value="nom_espece">Espèce</option>
-                  <option value="site">Site</option>
-                  <option value="protocole">Protocole</option>
-                  <option value="passage">Passage</option>
-                  <option value="groupe">Groupe</option>
-                  <option value="observateur">Observateur</option>
-                  <option value="remarques">Remarques</option>
-                </select>
-                <div class="search-input-wrap">
-                  <input type="search" id="searchObs" class="search-input" placeholder="Rechercher…" list="searchObsSuggestions" autocomplete="off" />
-                  <button type="button" class="search-clear" id="searchObsClear" aria-label="Supprimer le filtre" aria-hidden="true">×</button>
+        <div class="workspace">
+          <div class="workspace-main">
+            <div class="panels">
+              <div id="panelObservations" class="panel active" role="tabpanel">
+                <div class="panel-header">
+                  <div class="panel-title">
+                    <h2>Observations</h2>
+                    <p class="result-meta" id="obsResultMeta"></p>
+                  </div>
+                  <div class="panel-toolbar">
+                    <select id="searchObsColumn" class="search-column-select" title="Colonne de recherche">
+                      <option value="nom_espece">Espèce</option>
+                      <option value="site">Site</option>
+                      <option value="protocole">Protocole</option>
+                      <option value="passage">Passage</option>
+                      <option value="groupe">Groupe</option>
+                      <option value="observateur">Observateur</option>
+                      <option value="remarques">Remarques</option>
+                    </select>
+                    <div class="search-input-wrap">
+                      <input type="search" id="searchObs" class="search-input" placeholder="Filtrer les observations…" list="searchObsSuggestions" autocomplete="off" />
+                      <button type="button" class="search-clear" id="searchObsClear" aria-label="Supprimer le filtre" aria-hidden="true">×</button>
+                    </div>
+                    <datalist id="searchObsSuggestions"></datalist>
+                    <button type="button" class="btn btn-outline btn-sm" id="btnShowObsOnMap">Cadrer sur la carte</button>
+                  </div>
+                  <div class="selection-toolbar" data-type="observation">
+                    <span class="selection-label" id="obsSelectionLabel">Cochez des lignes pour les surligner sur la carte.</span>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btnObsSelectAll">Tout cocher</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btnObsDeselectAll">Effacer</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btnObsInvert">Inverser</button>
+                  </div>
                 </div>
-                <datalist id="searchObsSuggestions"></datalist>
-                <button type="button" class="btn btn-outline btn-sm" id="btnShowObsOnMap">Voir sur la carte</button>
+                <div class="table-shell">
+                  <div class="table-wrapper table-wrapper-integrated">
+                    <table class="data-table" id="tableObservations">
+                      <thead id="theadObservations"></thead>
+                      <tbody id="tbodyObservations"></tbody>
+                    </table>
+                  </div>
+                  <div id="emptyObs" class="empty-state hidden">
+                    <p class="empty-title">Aucune observation</p>
+                    <p class="empty-text">Changez le filtre de statut ou la recherche.</p>
+                  </div>
+                </div>
               </div>
-              <div class="selection-toolbar" data-type="observation">
-                <button type="button" class="btn btn-ghost btn-sm" id="btnObsSelectAll">Tout sélectionner</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btnObsDeselectAll">Tout désélectionner</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btnObsInvert">Inverser</button>
-              </div>
-            </div>
-            <div class="table-shell">
-              <div class="table-wrapper table-wrapper-integrated">
-                <table class="data-table" id="tableObservations">
-                  <thead id="theadObservations"></thead>
-                  <tbody id="tbodyObservations"></tbody>
-                </table>
-              </div>
-              <div id="emptyObs" class="empty-state hidden">
-                <p class="empty-title">Aucune observation</p>
-                <p class="empty-text">Modifiez les filtres ou attendez de nouvelles saisies depuis l’app.</p>
+
+              <div id="panelSites" class="panel" role="tabpanel">
+                <div class="panel-header">
+                  <div class="panel-title">
+                    <h2>Sites</h2>
+                    <p class="result-meta" id="sitesResultMeta"></p>
+                  </div>
+                  <div class="panel-toolbar">
+                    <select id="searchSitesColumn" class="search-column-select" title="Colonne de recherche">
+                      <option value="nom_du_site">Nom du site</option>
+                      <option value="protocole">Protocole</option>
+                      <option value="date">Date</option>
+                    </select>
+                    <div class="search-input-wrap">
+                      <input type="search" id="searchSites" class="search-input" placeholder="Filtrer les sites…" list="searchSitesSuggestions" autocomplete="off" />
+                      <button type="button" class="search-clear" id="searchSitesClear" aria-label="Supprimer le filtre" aria-hidden="true">×</button>
+                    </div>
+                    <datalist id="searchSitesSuggestions"></datalist>
+                    <button type="button" class="btn btn-outline btn-sm" id="btnShowSitesOnMap">Cadrer sur la carte</button>
+                  </div>
+                  <div class="selection-toolbar" data-type="site">
+                    <span class="selection-label" id="sitesSelectionLabel">Cochez des lignes pour les surligner sur la carte.</span>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btnSiteSelectAll">Tout cocher</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btnSiteDeselectAll">Effacer</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btnSiteInvert">Inverser</button>
+                  </div>
+                </div>
+                <div class="table-shell">
+                  <div class="table-wrapper table-wrapper-integrated">
+                    <table class="data-table" id="tableSites">
+                      <thead id="theadSites"></thead>
+                      <tbody id="tbodySites"></tbody>
+                    </table>
+                  </div>
+                  <div id="emptySites" class="empty-state hidden">
+                    <p class="empty-title">Aucun site</p>
+                    <p class="empty-text">Changez le filtre de statut ou la recherche.</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div id="panelSites" class="panel" role="tabpanel">
-            <div class="panel-header">
-              <h2>Sites d’observation</h2>
-              <div class="panel-toolbar">
-                <select id="searchSitesColumn" class="search-column-select" title="Colonne de recherche">
-                  <option value="nom_du_site">Nom du site</option>
-                  <option value="protocole">Protocole</option>
-                  <option value="date">Date</option>
-                </select>
-                <div class="search-input-wrap">
-                  <input type="search" id="searchSites" class="search-input" placeholder="Rechercher…" list="searchSitesSuggestions" autocomplete="off" />
-                  <button type="button" class="search-clear" id="searchSitesClear" aria-label="Supprimer le filtre" aria-hidden="true">×</button>
-                </div>
-                <datalist id="searchSitesSuggestions"></datalist>
-                <button type="button" class="btn btn-outline btn-sm" id="btnShowSitesOnMap">Voir sur la carte</button>
+          <aside class="map-pane" aria-label="Carte des données">
+            <div class="map-pane-head">
+              <div class="map-pane-title">
+                <h2>Carte</h2>
+                <p class="map-pane-note">Le contour ambre marque une donnée à valider. Un point orange est une ligne cochée.</p>
               </div>
-              <div class="selection-toolbar" data-type="site">
-                <button type="button" class="btn btn-ghost btn-sm" id="btnSiteSelectAll">Tout sélectionner</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btnSiteDeselectAll">Tout désélectionner</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btnSiteInvert">Inverser</button>
-              </div>
-            </div>
-            <div class="table-shell">
-              <div class="table-wrapper table-wrapper-integrated">
-                <table class="data-table" id="tableSites">
-                  <thead id="theadSites"></thead>
-                  <tbody id="tbodySites"></tbody>
-                </table>
-              </div>
-              <div id="emptySites" class="empty-state hidden">
-                <p class="empty-title">Aucun site</p>
-                <p class="empty-text">Modifiez les filtres ou attendez de nouvelles saisies depuis l’app.</p>
-              </div>
-            </div>
-          </div>
-
-          <div id="panelMap" class="panel panel-map" role="tabpanel">
-            <div class="panel-header panel-header-map">
-              <h2>Carte des données</h2>
               <div class="map-controls">
                 <label for="basemapSelect">Fond</label>
                 <select id="basemapSelect">
@@ -190,23 +208,27 @@
                   <option value="topo">Topographique</option>
                   <option value="dark">Sombre</option>
                 </select>
-                <button type="button" class="btn btn-primary btn-sm" id="btnZoomToSelection" title="Zoomer sur les éléments visibles">Zoomer</button>
-                <span id="mapVisibleCount" class="map-visible-count" aria-live="polite">0 observations, 0 sites</span>
+                <button type="button" class="btn btn-primary btn-sm" id="btnZoomToSelection" title="Cadrer sur les données affichées, ou sur la sélection s’il y en a une">Cadrer</button>
               </div>
               <div class="map-layer-toggles">
                 <label class="map-checkbox-label"><input type="checkbox" id="mapShowObs" checked /> <span class="legend-dot obs"></span> Observations</label>
                 <label class="map-checkbox-label"><input type="checkbox" id="mapShowSites" checked /> <span class="legend-dot site"></span> Sites</label>
+                <label class="map-checkbox-label"><span class="legend-line"></span> Transects</label>
+                <span id="mapVisibleCount" class="map-visible-count" aria-live="polite">0 observations, 0 sites</span>
               </div>
             </div>
-            <div id="map" class="map-container map-container-integrated"></div>
-          </div>
+            <div class="map-frame">
+              <div id="map" class="map-container"></div>
+              <p id="mapEmpty" class="map-empty hidden">Aucune position pour ce filtre.</p>
+            </div>
+          </aside>
         </div>
       </section>
     </main>
 
     <footer class="footer">
       <div class="footer-inner">
-        <p>Conservatoire d’espaces naturels de Corse — Interface de validation</p>
+        <p>CEN Corse — registre de validation des observations et des sites</p>
       </div>
     </footer>
   </div>
@@ -232,11 +254,11 @@
 
   <div id="exportModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
     <div class="modal export-modal">
-      <h2 id="exportModalTitle" class="modal-title">Confirmer l’export</h2>
+      <h2 id="exportModalTitle" class="modal-title">Exporter</h2>
       <p class="modal-message" id="exportModalMessage"></p>
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" id="exportModalCancel">Annuler</button>
-        <button type="button" class="btn btn-primary" id="exportModalConfirm">Confirmer</button>
+        <button type="button" class="btn btn-primary" id="exportModalConfirm">Télécharger le CSV</button>
       </div>
     </div>
   </div>

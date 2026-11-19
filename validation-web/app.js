@@ -21,6 +21,10 @@ let mapBaseLayers = {}
 let clusterGroupObs = null
 let clusterGroupSites = null
 let layerGroupSitesLine = null
+let obsMarkerById = new Map()
+let siteMarkerById = new Map()
+let siteLineById = new Map()
+let mapFittedOnce = false
 
 let filterObsText = ''
 let filterSitesText = ''
@@ -103,19 +107,15 @@ function setLoading(on) {
 }
 
 function updateStats() {
-  const pending =
-    observations.filter((o) => !o.validated).length +
-    sites.filter((s) => !s.validated).length
-  const validated =
-    observations.filter((o) => o.validated).length +
-    sites.filter((s) => s.validated).length
-  const total = observations.length + sites.length
-  const elPending = document.getElementById('statPending')
-  const elValidated = document.getElementById('statValidated')
-  const elTotal = document.getElementById('statTotal')
-  if (elPending) elPending.textContent = String(pending)
-  if (elValidated) elValidated.textContent = String(validated)
-  if (elTotal) elTotal.textContent = String(total)
+  const set = (id, value) => {
+    const el = document.getElementById(id)
+    if (el) el.textContent = String(value)
+  }
+  set('statObsPending', observations.filter((o) => !o.validated).length)
+  set('statObsOk', observations.filter((o) => o.validated).length)
+  set('statSitesPending', sites.filter((s) => !s.validated).length)
+  set('statSitesOk', sites.filter((s) => s.validated).length)
+  syncViewState()
 }
 
 function validatedCell(isValidated) {
@@ -179,6 +179,92 @@ function formatSpecies(str) {
   if (str == null || String(str).trim() === '') return '—'
   const t = String(str).trim().toLowerCase()
   return t.charAt(0).toUpperCase() + t.slice(1)
+}
+
+function speciesHtml(str) {
+  if (str == null || String(str).trim() === '') return '—'
+  const raw = String(str).trim()
+  const parts = raw.split(/\s[-–—]\s/)
+  if (parts.length >= 2) {
+    const common = parts[0]
+    const latin = parts.slice(1).join(' – ')
+    const author = latin.match(/^(.*?)(\s*\([^)]*\))\s*$/)
+    if (author) return `${escapeHtml(common)} — <em>${escapeHtml(author[1].trim())}</em>${escapeHtml(author[2])}`
+    return `${escapeHtml(common)} — <em>${escapeHtml(latin)}</em>`
+  }
+  return `<em>${escapeHtml(raw)}</em>`
+}
+
+function escapeHtml(val) {
+  return String(val ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function formatFieldDate(value) {
+  if (value == null || String(value).trim() === '') return '—'
+  const s = String(value)
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const d = new Date(s.slice(0, 10) + 'T12:00:00')
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
+    }
+  }
+  return s
+}
+
+function toLatLng(lat, lng) {
+  const la = typeof lat === 'number' ? lat : parseFloat(String(lat ?? '').replace(',', '.'))
+  const ln = typeof lng === 'number' ? lng : parseFloat(String(lng ?? '').replace(',', '.'))
+  if (!Number.isFinite(la) || !Number.isFinite(ln)) return null
+  if (Math.abs(la) > 90 || Math.abs(ln) > 180) return null
+  if (la === 0 && ln === 0) return null
+  return [la, ln]
+}
+
+function parsePath(raw) {
+  let path = raw
+  if (path == null || path === '') return []
+  if (typeof path === 'string') {
+    try { path = JSON.parse(path) } catch { return [] }
+  }
+  if (path && path.type === 'LineString' && Array.isArray(path.coordinates)) {
+    return path.coordinates.map((c) => Array.isArray(c) ? toLatLng(c[1], c[0]) : null).filter(Boolean)
+  }
+  if (!Array.isArray(path)) return []
+  return path.map((p) => {
+    if (Array.isArray(p)) return toLatLng(p[0], p[1])
+    if (p && typeof p === 'object') return toLatLng(p.lat ?? p.latitude, p.lng ?? p.lon ?? p.longitude)
+    return null
+  }).filter(Boolean)
+}
+
+function sitePosition(site) {
+  const path = parsePath(site && site.path_coordinates)
+  if (path.length >= 2) return { latlng: path[Math.floor(path.length / 2)], path, linear: true }
+  const point = toLatLng(site && site.latitude, site && site.longitude)
+  if (point) return { latlng: point, path: [], linear: false }
+  if (path.length === 1) return { latlng: path[0], path, linear: false }
+  return null
+}
+
+function resolveObservationPosition(obs) {
+  const direct = toLatLng(obs && obs.latitude, obs && obs.longitude)
+  if (direct) return { latlng: direct, inferred: false }
+  const name = String(obs && obs.site ? obs.site : '').trim().toLowerCase()
+  if (!name) return null
+  const site = sites.find((s) => String(s.nom_du_site || '').trim().toLowerCase() === name)
+  const pos = site ? sitePosition(site) : null
+  if (!pos) return null
+  return { latlng: pos.latlng, inferred: true }
+}
+
+function popupStatus(validated) {
+  return validated
+    ? '<div class="popup-line"><strong>Statut :</strong> validée</div>'
+    : '<div class="popup-line"><strong>Statut :</strong> à valider</div>'
 }
 
 function escapeCsvCell(val) {
@@ -292,18 +378,53 @@ function updateTabCounts() {
       tabCountSites.title = ''
     }
   }
+  const obsMeta = document.getElementById('obsResultMeta')
+  if (obsMeta) {
+    obsMeta.textContent = obsList.length === totalObs
+      ? `${totalObs} observation${totalObs > 1 ? 's' : ''}`
+      : `${obsList.length} sur ${totalObs} observations`
+  }
+  const sitesMeta = document.getElementById('sitesResultMeta')
+  if (sitesMeta) {
+    sitesMeta.textContent = siteList.length === totalSites
+      ? `${totalSites} site${totalSites > 1 ? 's' : ''}`
+      : `${siteList.length} sur ${totalSites} sites`
+  }
+  const obsSel = document.getElementById('obsSelectionLabel')
+  const obsBar = document.querySelector('.selection-toolbar[data-type="observation"]')
+  if (obsSel) obsSel.textContent = selObs > 0
+    ? `${selObs} observation${selObs > 1 ? 's' : ''} surlignée${selObs > 1 ? 's' : ''} sur la carte`
+    : 'Cochez des lignes pour les surligner sur la carte.'
+  if (obsBar) obsBar.classList.toggle('has-selection', selObs > 0)
+  const sitesSel = document.getElementById('sitesSelectionLabel')
+  const sitesBar = document.querySelector('.selection-toolbar[data-type="site"]')
+  if (sitesSel) sitesSel.textContent = selSites > 0
+    ? `${selSites} site${selSites > 1 ? 's' : ''} surligné${selSites > 1 ? 's' : ''} sur la carte`
+    : 'Cochez des lignes pour les surligner sur la carte.'
+  if (sitesBar) sitesBar.classList.toggle('has-selection', selSites > 0)
   updateMapVisibleCount()
+}
+
+function countMapped(list, kind) {
+  let placed = 0
+  list.forEach((row) => {
+    if (kind === 'observation' ? resolveObservationPosition(row) : sitePosition(row)) placed += 1
+  })
+  return { placed, missing: list.length - placed }
 }
 
 function updateMapVisibleCount() {
   const el = document.getElementById('mapVisibleCount')
+  const empty = document.getElementById('mapEmpty')
   if (!el) return
-  const { obs, siteList } = getMapVisibleObsAndSites()
   const showObs = document.getElementById('mapShowObs')?.checked !== false
   const showSites = document.getElementById('mapShowSites')?.checked !== false
-  const nObs = showObs ? obs.length : 0
-  const nSites = showSites ? siteList.length : 0
-  el.textContent = nObs + ' observation' + (nObs !== 1 ? 's' : '') + ', ' + nSites + ' site' + (nSites !== 1 ? 's' : '') + ' visible' + (nObs + nSites !== 1 ? 's' : '')
+  const { obs, siteList } = getMapVisibleObsAndSites()
+  const obsCount = showObs ? countMapped(obs, 'observation') : { placed: 0, missing: 0 }
+  const siteCount = showSites ? countMapped(siteList, 'site') : { placed: 0, missing: 0 }
+  const missing = obsCount.missing + siteCount.missing
+  el.textContent = `${obsCount.placed} observation${obsCount.placed > 1 ? 's' : ''} · ${siteCount.placed} site${siteCount.placed > 1 ? 's' : ''} sur la carte${missing ? ` · ${missing} sans position` : ''}`
+  if (empty) empty.classList.toggle('hidden', obsCount.placed + siteCount.placed > 0)
 }
 
 function getPhotoUrls(record) {
@@ -385,27 +506,27 @@ function renderObservationsTable() {
   setEmptyState('observation', filtered.length === 0)
   const columns = [
     { key: '_select', label: '', type: 'select', dataType: 'observation' },
-    { key: 'photo_url', label: 'Photo', type: 'photo' },
-    { key: 'date', label: 'Date' },
-    { key: 'protocole', label: 'Protocole' },
-    { key: 'passage', label: 'Passage' },
-    { key: 'site', label: 'Site' },
-    { key: 'presence', label: 'Présence', type: 'bool' },
-    { key: 'groupe', label: 'Groupe' },
+    { key: '_action', label: 'Action', type: 'action', action: 'observation' },
+    { key: 'validated', label: 'Statut', type: 'validated' },
     { key: 'nom_espece', label: 'Espèce' },
+    { key: 'date', label: 'Date' },
+    { key: 'site', label: 'Site' },
+    { key: 'protocole', label: 'Protocole' },
     { key: 'effectif', label: 'Effectif' },
+    { key: 'groupe', label: 'Groupe' },
     { key: 'stade', label: 'Stade' },
     { key: 'sexe', label: 'Sexe' },
+    { key: 'observateur', label: 'Observateur' },
+    { key: 'passage', label: 'Passage' },
+    { key: 'presence', label: 'Présence', type: 'bool' },
+    { key: 'photo_url', label: 'Photo', type: 'photo' },
     { key: 'remarques', label: 'Remarques' },
     { key: 'latitude', label: 'Lat', type: 'num' },
     { key: 'longitude', label: 'Lon', type: 'num' },
-    { key: 'observateur', label: 'Observateur' },
-    { key: 'created_at', label: 'Encodé le', type: 'date' },
-    { key: 'validated', label: 'Validé', type: 'validated' },
-    { key: 'validated_at', label: 'Validé le', type: 'date' },
-    { key: '_action', label: 'Action', type: 'action', action: 'observation' }
+    { key: 'created_at', label: 'Saisie', type: 'date' },
+    { key: 'validated_at', label: 'Validé le', type: 'date' }
   ]
-  theadObservations.innerHTML = '<tr>' + columns.map(c => c.type === 'select' ? '<th class="cell-select"></th>' : `<th>${c.label}</th>`).join('') + '</tr>'
+  theadObservations.innerHTML = '<tr>' + columns.map(c => c.type === 'select' ? '<th class="cell-select"></th>' : `<th class="${c.thClass || ''}">${c.label}</th>`).join('') + '</tr>'
   tbodyObservations.innerHTML = filtered.map(o => {
     const id = o.id || ''
     const checked = selectedObsIds.has(id)
@@ -421,14 +542,20 @@ function renderObservationsTable() {
       if (c.type === 'date') return `<td class="cell-date">${formatDate(o[c.key])}</td>`
       if (c.type === 'validated') return validatedCell(!!o.validated)
       if (c.type === 'action' && c.action === 'observation') {
+        const locate = `<button type="button" class="btn btn-sm btn-outline btn-locate" data-id="${o.id}" data-type="observation" title="Voir sur la carte">Carte</button>`
         if (o.validated) {
-          return `<td class="cell-actions"><button type="button" class="btn btn-sm btn-ghost btn-unvalidate" data-id="${o.id}" data-type="observation">Retirer validation</button></td>`
+          return `<td class="cell-actions">${locate}<button type="button" class="btn btn-sm btn-ghost btn-unvalidate" data-id="${o.id}" data-type="observation" title="Retirer la validation">Retirer</button></td>`
         }
-        return `<td class="cell-actions"><button type="button" class="btn btn-sm btn-validate" data-id="${o.id}" data-type="observation">Valider</button></td>`
+        return `<td class="cell-actions">${locate}<button type="button" class="btn btn-sm btn-validate" data-id="${o.id}" data-type="observation">Valider</button></td>`
       }
       const val = o[c.key]
-      if (c.key === 'nom_espece') return `<td class="cell-species">${val != null ? formatSpecies(val) : '—'}</td>`
-      return `<td>${val ?? '—'}</td>`
+      if (c.key === 'nom_espece') return `<td class="cell-species">${speciesHtml(val)}</td>`
+      if (c.key === 'date') return `<td class="cell-date">${escapeHtml(formatFieldDate(val))}</td>`
+      if (c.key === 'remarques') {
+        const text = val != null && String(val).trim() !== '' ? escapeHtml(val) : '—'
+        return `<td class="cell-notes" title="${val != null ? escapeHtml(val) : ''}">${text}</td>`
+      }
+      return `<td>${val != null && val !== '' ? escapeHtml(val) : '—'}</td>`
     })
     return '<tr data-id="' + (o.id || '') + '" class="' + (selectedObsIds.has(o.id) ? 'selected' : '') + '">' + cells.join('') + '</tr>'
   }).join('')
@@ -440,6 +567,9 @@ function renderObservationsTable() {
       updateMap()
       updateTabCounts()
     })
+  })
+  tbodyObservations.querySelectorAll('.btn-locate').forEach(btn => {
+    btn.addEventListener('click', () => focusRecord(btn.dataset.type, btn.dataset.id))
   })
   tbodyObservations.querySelectorAll('.btn-validate').forEach(btn => {
     btn.addEventListener('click', () => validateRow(btn.dataset.id, 'observation'))
@@ -471,19 +601,19 @@ function renderSitesTable() {
   setEmptyState('site', filtered.length === 0)
   const columns = [
     { key: '_select', label: '', type: 'select', dataType: 'site' },
-    { key: 'photo_url', label: 'Photo', type: 'photo' },
+    { key: '_action', label: 'Action', type: 'action', action: 'site' },
+    { key: 'validated', label: 'Statut', type: 'validated' },
+    { key: 'nom_du_site', label: 'Nom du site' },
     { key: 'date', label: 'Date' },
     { key: 'protocole', label: 'Protocole' },
-    { key: 'nom_du_site', label: 'Nom du site' },
     { key: 'latitude', label: 'Lat', type: 'num' },
     { key: 'longitude', label: 'Lon', type: 'num' },
     { key: 'length_meters', label: 'Longueur (m)', type: 'num' },
-    { key: 'created_at', label: 'Encodé le', type: 'date' },
-    { key: 'validated', label: 'Validé', type: 'validated' },
-    { key: 'validated_at', label: 'Validé le', type: 'date' },
-    { key: '_action', label: 'Action', type: 'action', action: 'site' }
+    { key: 'photo_url', label: 'Photo', type: 'photo' },
+    { key: 'created_at', label: 'Saisie', type: 'date' },
+    { key: 'validated_at', label: 'Validé le', type: 'date' }
   ]
-  theadSites.innerHTML = '<tr>' + columns.map(c => c.type === 'select' ? '<th class="cell-select"></th>' : `<th>${c.label}</th>`).join('') + '</tr>'
+  theadSites.innerHTML = '<tr>' + columns.map(c => c.type === 'select' ? '<th class="cell-select"></th>' : `<th class="${c.thClass || ''}">${c.label}</th>`).join('') + '</tr>'
   tbodySites.innerHTML = filtered.map(s => {
     const id = s.id || ''
     const checked = selectedSiteIds.has(id)
@@ -498,12 +628,15 @@ function renderSitesTable() {
       if (c.type === 'date') return `<td class="cell-date">${formatDate(s[c.key])}</td>`
       if (c.type === 'validated') return validatedCell(!!s.validated)
       if (c.type === 'action' && c.action === 'site') {
+        const locate = `<button type="button" class="btn btn-sm btn-outline btn-locate" data-id="${s.id}" data-type="site" title="Voir sur la carte">Carte</button>`
         if (s.validated) {
-          return `<td class="cell-actions"><button type="button" class="btn btn-sm btn-ghost btn-unvalidate" data-id="${s.id}" data-type="site">Retirer validation</button></td>`
+          return `<td class="cell-actions">${locate}<button type="button" class="btn btn-sm btn-ghost btn-unvalidate" data-id="${s.id}" data-type="site" title="Retirer la validation">Retirer</button></td>`
         }
-        return `<td class="cell-actions"><button type="button" class="btn btn-sm btn-validate" data-id="${s.id}" data-type="site">Valider</button></td>`
+        return `<td class="cell-actions">${locate}<button type="button" class="btn btn-sm btn-validate" data-id="${s.id}" data-type="site">Valider</button></td>`
       }
-      return `<td>${s[c.key] ?? '—'}</td>`
+      if (c.key === 'date') return `<td class="cell-date">${escapeHtml(formatFieldDate(s[c.key]))}</td>`
+      if (c.key === 'nom_du_site') return `<td>${s[c.key] != null && s[c.key] !== '' ? escapeHtml(s[c.key]) : '—'}</td>`
+      return `<td>${s[c.key] != null && s[c.key] !== '' ? escapeHtml(s[c.key]) : '—'}</td>`
     })
     return '<tr data-id="' + (s.id || '') + '" class="' + (selectedSiteIds.has(s.id) ? 'selected' : '') + '">' + cells.join('') + '</tr>'
   }).join('')
@@ -515,6 +648,9 @@ function renderSitesTable() {
       updateMap()
       updateTabCounts()
     })
+  })
+  tbodySites.querySelectorAll('.btn-locate').forEach(btn => {
+    btn.addEventListener('click', () => focusRecord(btn.dataset.type, btn.dataset.id))
   })
   tbodySites.querySelectorAll('.btn-validate').forEach(btn => {
     btn.addEventListener('click', () => validateRow(btn.dataset.id, 'site'))
@@ -653,48 +789,92 @@ function invertSelectionSite() {
   updateTabCounts()
 }
 
+function markerOptions(kind, selected, pending) {
+  return {
+    radius: selected ? 8 : (kind === 'observation' ? 6 : 7),
+    fillColor: selected ? '#b45309' : (kind === 'observation' ? '#1f6f8b' : '#1e4d3e'),
+    color: pending ? '#8d5b12' : '#ffffff',
+    weight: pending ? 3 : 2,
+    fillOpacity: 0.92
+  }
+}
+
+function observationPopup(o, inferred) {
+  const species = o.nom_espece ? speciesHtml(o.nom_espece) : 'Espèce non renseignée'
+  return `<div class="popup-content">
+    <div class="popup-kicker">Observation</div>
+    <div class="popup-title">${species}</div>
+    <div class="popup-line">${escapeHtml(formatFieldDate(o.date))}${o.site ? ' · ' + escapeHtml(o.site) : ''}</div>
+    <div class="popup-line">${escapeHtml(o.protocole || '—')}${o.effectif ? ' · effectif ' + escapeHtml(o.effectif) : ''}</div>
+    <div class="popup-line">${escapeHtml(o.observateur || 'Observateur non renseigné')}</div>
+    ${popupStatus(o.validated)}
+    ${inferred ? '<div class="popup-inferred">Position reprise du site</div>' : ''}
+  </div>`
+}
+
+function sitePopup(s, linear) {
+  const length = s.length_meters != null ? `${Number(s.length_meters).toFixed(0)} m` : '—'
+  return `<div class="popup-content">
+    <div class="popup-kicker">${linear ? 'Transect' : 'Site'}</div>
+    <div class="popup-title">${escapeHtml(s.nom_du_site || 'Site sans nom')}</div>
+    <div class="popup-line">${escapeHtml(formatFieldDate(s.date))}${s.protocole ? ' · ' + escapeHtml(s.protocole) : ''}</div>
+    ${linear ? `<div class="popup-line">Longueur : ${escapeHtml(length)}</div>` : ''}
+    ${popupStatus(s.validated)}
+  </div>`
+}
+
+function collectLatLngs(obs, siteList) {
+  const latLngs = []
+  obs.forEach((o) => {
+    const pos = resolveObservationPosition(o)
+    if (pos) latLngs.push(pos.latlng)
+  })
+  siteList.forEach((s) => {
+    const pos = sitePosition(s)
+    if (!pos) return
+    if (pos.path.length >= 2) pos.path.forEach((p) => latLngs.push(p))
+    else latLngs.push(pos.latlng)
+  })
+  return latLngs
+}
+
+function fitMap(latLngs, maxZoom) {
+  if (!mapInstance) return
+  mapInstance.invalidateSize()
+  if (!latLngs.length) {
+    mapInstance.setView(CORSICA_CENTER, 8)
+    return
+  }
+  mapInstance.fitBounds(L.latLngBounds(latLngs).pad(0.18), { maxZoom: maxZoom ?? 12 })
+}
+
 function updateMap() {
   const container = document.getElementById('map')
-  const panel = document.getElementById('panelMap')
-  if (!container || !panel.classList.contains('active')) return
+  if (!container || typeof L === 'undefined') return
 
   const showObs = document.getElementById('mapShowObs')?.checked !== false
   const showSites = document.getElementById('mapShowSites')?.checked !== false
-
-  const hasObsSelection = selectedObsIds.size > 0
-  const hasSiteSelection = selectedSiteIds.size > 0
-  const filteredObs = hasObsSelection
-    ? getFilteredObservations().filter(o => selectedObsIds.has(o.id))
-    : getFilteredObservations()
-  const filteredSitesList = hasSiteSelection
-    ? getFilteredSites().filter(s => selectedSiteIds.has(s.id))
-    : getFilteredSites()
-
-  updateMapVisibleCount()
+  const filteredObs = getFilteredObservations()
+  const filteredSitesList = getFilteredSites()
 
   if (!mapInstance) {
-    mapInstance = L.map('map').setView(CORSICA_CENTER, 8)
+    mapInstance = L.map('map', { scrollWheelZoom: true }).setView(CORSICA_CENTER, 8)
+    L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(mapInstance)
     mapBaseLayers = {
       osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }),
       satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; Esri' }),
       topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenTopoMap' }),
-      dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CartoDB' })
+      dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO' })
     }
     mapBaseLayers.osm.addTo(mapInstance)
-    clusterGroupObs = L.markerClusterGroup({
-      maxClusterRadius: 45,
-      spiderfyOnMaxZoom: true,
-      showCoverageOnHover: false
-    })
+    clusterGroupObs = L.markerClusterGroup({ maxClusterRadius: 42, spiderfyOnMaxZoom: true, showCoverageOnHover: false })
     clusterGroupSites = L.markerClusterGroup({
-      maxClusterRadius: 50,
+      maxClusterRadius: 48,
       spiderfyOnMaxZoom: true,
       showCoverageOnHover: false,
       iconCreateFunction: function (cluster) {
         const count = cluster.getChildCount()
-        let size = 'small'
-        if (count >= 20) size = 'large'
-        else if (count >= 10) size = 'medium'
+        const size = count >= 20 ? 'large' : count >= 10 ? 'medium' : 'small'
         return L.divIcon({
           html: '<div><span>' + count + '</span></div>',
           className: 'marker-cluster marker-cluster-sites marker-cluster-' + size,
@@ -707,104 +887,169 @@ function updateMap() {
     clusterGroupSites.addTo(mapInstance)
     layerGroupSitesLine.addTo(mapInstance)
     const sel = document.getElementById('basemapSelect')
-    if (sel) sel.addEventListener('change', (e) => {
-      Object.values(mapBaseLayers).forEach(l => mapInstance.removeLayer(l))
-      mapBaseLayers[e.target.value].addTo(mapInstance)
-      clusterGroupObs.addTo(mapInstance)
-      clusterGroupSites.addTo(mapInstance)
-      layerGroupSitesLine.addTo(mapInstance)
-    })
+    if (sel && !sel.dataset.bound) {
+      sel.dataset.bound = '1'
+      sel.addEventListener('change', (e) => {
+        Object.values(mapBaseLayers).forEach((l) => mapInstance.removeLayer(l))
+        const next = mapBaseLayers[e.target.value] || mapBaseLayers.osm
+        next.addTo(mapInstance)
+        clusterGroupObs.addTo(mapInstance)
+        clusterGroupSites.addTo(mapInstance)
+        layerGroupSitesLine.addTo(mapInstance)
+      })
+    }
+    window.addEventListener('resize', () => mapInstance && mapInstance.invalidateSize())
   }
 
   clusterGroupObs.clearLayers()
   clusterGroupSites.clearLayers()
   layerGroupSitesLine.clearLayers()
+  obsMarkerById = new Map()
+  siteMarkerById = new Map()
+  siteLineById = new Map()
 
   if (showObs) {
-    filteredObs.forEach(o => {
-      if (o.latitude != null && o.longitude != null) {
-        const popup = `<div class="popup-content"><div class="popup-title">Observation</div><div class="popup-line"><strong>Date :</strong> ${o.date || '—'}</div><div class="popup-line"><strong>Espèce :</strong> ${(o.nom_espece && formatSpecies(o.nom_espece)) || '—'}</div><div class="popup-line"><strong>Site :</strong> ${o.site || '—'}</div></div>`
-        const m = L.circleMarker([o.latitude, o.longitude], {
-          radius: 6,
-          fillColor: '#0ea5e9',
-          color: '#fff',
-          weight: 2,
-          fillOpacity: 0.9
-        }).bindPopup(popup)
-        clusterGroupObs.addLayer(m)
-      }
+    filteredObs.forEach((o) => {
+      const pos = resolveObservationPosition(o)
+      if (!pos || !o.id) return
+      const selected = selectedObsIds.has(o.id)
+      const marker = L.circleMarker(pos.latlng, markerOptions('observation', selected, !o.validated))
+        .bindPopup(observationPopup(o, pos.inferred))
+      clusterGroupObs.addLayer(marker)
+      obsMarkerById.set(String(o.id), marker)
     })
   }
 
   if (showSites) {
-    filteredSitesList.forEach(s => {
-      if (s.path_coordinates && Array.isArray(s.path_coordinates) && s.path_coordinates.length >= 2) {
-        const latLngs = s.path_coordinates.map(p => [p[0], p[1]])
-        const popup = `<div class="popup-content"><div class="popup-title">Site linéaire</div><div class="popup-line"><strong>Nom :</strong> ${s.nom_du_site || '—'}</div><div class="popup-line"><strong>Longueur :</strong> ${s.length_meters != null ? s.length_meters + ' m' : '—'}</div></div>`
-        const polyline = L.polyline(latLngs, { color: '#14b8a6', weight: 4 }).bindPopup(popup)
-        layerGroupSitesLine.addLayer(polyline)
-      } else if (s.latitude != null && s.longitude != null && showSites) {
-        const popup = `<div class="popup-content"><div class="popup-title">Site</div><div class="popup-line"><strong>Nom :</strong> ${s.nom_du_site || '—'}</div></div>`
-        const m = L.circleMarker([s.latitude, s.longitude], {
-          radius: 8,
-          fillColor: '#10b981',
-          color: '#fff',
-          weight: 2,
-          fillOpacity: 0.9
-        }).bindPopup(popup)
-        clusterGroupSites.addLayer(m)
+    filteredSitesList.forEach((s) => {
+      const pos = sitePosition(s)
+      if (!pos || !s.id) return
+      const selected = selectedSiteIds.has(s.id)
+      if (pos.linear && pos.path.length >= 2) {
+        const line = L.polyline(pos.path, {
+          color: selected ? '#b45309' : '#9a6700',
+          weight: selected ? 6 : 4,
+          opacity: 0.9
+        }).bindPopup(sitePopup(s, true))
+        layerGroupSitesLine.addLayer(line)
+        siteLineById.set(String(s.id), line)
       }
+      const marker = L.circleMarker(pos.latlng, markerOptions('site', selected, !s.validated))
+        .bindPopup(sitePopup(s, pos.linear))
+      clusterGroupSites.addLayer(marker)
+      siteMarkerById.set(String(s.id), marker)
     })
   }
+
+  updateMapVisibleCount()
+  if (!mapFittedOnce) {
+    const pts = collectLatLngs(showObs ? filteredObs : [], showSites ? filteredSitesList : [])
+    if (pts.length) {
+      mapFittedOnce = true
+      setTimeout(() => fitMap(pts, 11), 80)
+    }
+  }
+  requestAnimationFrame(() => mapInstance && mapInstance.invalidateSize())
 }
 
 function getMapVisibleObsAndSites() {
-  const hasObsSelection = selectedObsIds.size > 0
-  const hasSiteSelection = selectedSiteIds.size > 0
-  const obs = hasObsSelection ? getFilteredObservations().filter(o => selectedObsIds.has(o.id)) : getFilteredObservations()
-  const siteList = hasSiteSelection ? getFilteredSites().filter(s => selectedSiteIds.has(s.id)) : getFilteredSites()
+  return { obs: getFilteredObservations(), siteList: getFilteredSites() }
+}
+
+function frameTargets() {
+  const showObs = document.getElementById('mapShowObs')?.checked !== false
+  const showSites = document.getElementById('mapShowSites')?.checked !== false
+  const hasSel = selectedObsIds.size > 0 || selectedSiteIds.size > 0
+  let obs = showObs ? getFilteredObservations() : []
+  let siteList = showSites ? getFilteredSites() : []
+  if (hasSel) {
+    obs = obs.filter((o) => selectedObsIds.has(o.id))
+    siteList = siteList.filter((s) => selectedSiteIds.has(s.id))
+  }
   return { obs, siteList }
 }
 
 function zoomMapToSelection() {
-  if (!mapInstance) return
-  mapInstance.invalidateSize()
-  const showObs = document.getElementById('mapShowObs')?.checked !== false
-  const showSites = document.getElementById('mapShowSites')?.checked !== false
-  const { obs, siteList } = getMapVisibleObsAndSites()
-  const latLngs = []
-  if (showObs) obs.forEach(o => { if (o.latitude != null && o.longitude != null) latLngs.push([o.latitude, o.longitude]) })
-  if (showSites) {
-    siteList.forEach(s => {
-      if (s.path_coordinates && Array.isArray(s.path_coordinates)) s.path_coordinates.forEach(p => latLngs.push([p[0], p[1]]))
-      else if (s.latitude != null && s.longitude != null) latLngs.push([s.latitude, s.longitude])
-    })
-  }
-  if (latLngs.length === 0) {
-    mapInstance.setView(CORSICA_CENTER, 8)
-    return
-  }
-  const bounds = L.latLngBounds(latLngs)
-  mapInstance.fitBounds(bounds.pad(0.15), { maxZoom: 14 })
+  if (!mapInstance) updateMap()
+  const { obs, siteList } = frameTargets()
+  fitMap(collectLatLngs(obs, siteList), 14)
 }
 
-function zoomMapToFiltered() {
-  if (!mapInstance) return
-  const showObs = document.getElementById('mapShowObs')?.checked !== false
-  const showSites = document.getElementById('mapShowSites')?.checked !== false
-  const filteredObs = getFilteredObservations()
-  const filteredSitesList = getFilteredSites()
-  const latLngs = []
-  if (showObs) filteredObs.forEach(o => { if (o.latitude != null && o.longitude != null) latLngs.push([o.latitude, o.longitude]) })
-  if (showSites) {
-    filteredSitesList.forEach(s => {
-      if (s.path_coordinates && Array.isArray(s.path_coordinates)) s.path_coordinates.forEach(p => latLngs.push([p[0], p[1]]))
-      else if (s.latitude != null && s.longitude != null) latLngs.push([s.latitude, s.longitude])
-    })
+function zoomMapToFiltered(kind) {
+  if (!mapInstance) updateMap()
+  const obs = kind === 'site' ? [] : getFilteredObservations()
+  const siteList = kind === 'observation' ? [] : getFilteredSites()
+  const pts = collectLatLngs(obs, siteList)
+  if (!pts.length) {
+    showToast('Aucune position à cadrer.', 'error')
+    return
   }
-  if (latLngs.length === 0) return
-  const bounds = L.latLngBounds(latLngs)
-  mapInstance.fitBounds(bounds.pad(0.15), { maxZoom: 10 })
+  fitMap(pts, 12)
+}
+
+function focusRecord(type, id) {
+  const key = String(id || '')
+  if (!key) return
+  const toggle = document.getElementById(type === 'observation' ? 'mapShowObs' : 'mapShowSites')
+  if (toggle && !toggle.checked) toggle.checked = true
+  const narrow = window.matchMedia('(max-width: 1100px)').matches
+  if (narrow) activateTab('map', { zoom: false })
+  updateMap()
+  document.querySelectorAll('tr.is-located').forEach((tr) => tr.classList.remove('is-located'))
+  const body = document.getElementById(type === 'observation' ? 'tbodyObservations' : 'tbodySites')
+  body?.querySelector(`tr[data-id="${CSS.escape(key)}"]`)?.classList.add('is-located')
+  setTimeout(() => {
+    if (!mapInstance) return
+    mapInstance.invalidateSize()
+    const layer = type === 'observation'
+      ? obsMarkerById.get(key)
+      : (siteMarkerById.get(key) || siteLineById.get(key))
+    if (!layer) {
+      showToast('Cette donnée n’a pas de coordonnées.', 'error')
+      return
+    }
+    const open = () => layer.openPopup()
+    if (type === 'observation' && layer.getLatLng && clusterGroupObs) clusterGroupObs.zoomToShowLayer(layer, open)
+    else if (layer.getLatLng && clusterGroupSites) clusterGroupSites.zoomToShowLayer(layer, open)
+    else if (layer.getBounds) {
+      mapInstance.fitBounds(layer.getBounds().pad(0.3), { maxZoom: 14 })
+      open()
+    }
+    document.getElementById('map')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, narrow ? 180 : 40)
+}
+
+function syncViewState() {
+  document.querySelectorAll('.seg-btn').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.filter === validationFilter)
+  })
+  const select = document.getElementById('filterValidated')
+  if (select && select.value !== validationFilter) select.value = validationFilter
+  const tab = document.querySelector('.tab.active')?.dataset.tab || 'observations'
+  document.querySelectorAll('[data-jump]').forEach((card) => {
+    card.classList.toggle('is-current', card.dataset.jump === `${tab}:${validationFilter}`)
+  })
+}
+
+function activateTab(tabName, { zoom = false } = {}) {
+  document.querySelectorAll('.tab').forEach((t) => {
+    const on = t.dataset.tab === tabName
+    t.classList.toggle('active', on)
+    t.setAttribute('aria-selected', on ? 'true' : 'false')
+  })
+  document.querySelectorAll('.panel').forEach((p) => {
+    const id = p.id
+    const active = (id === 'panelObservations' && tabName === 'observations') ||
+      (id === 'panelSites' && tabName === 'sites')
+    p.classList.toggle('active', active)
+  })
+  document.getElementById('dataSection')?.classList.toggle('is-map-focus', tabName === 'map')
+  syncViewState()
+  setTimeout(() => {
+    updateMap()
+    if (mapInstance) mapInstance.invalidateSize()
+    if (zoom) zoomMapToSelection()
+  }, 70)
 }
 
 function bindSearchAndMapControls() {
@@ -867,24 +1112,43 @@ function bindSearchAndMapControls() {
       updateMap()
       updateTabCounts()
       updateSearchSuggestions()
+      syncViewState()
     })
   }
+
+  document.querySelectorAll('.seg-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (!filterValidated) return
+      filterValidated.value = btn.dataset.filter
+      filterValidated.dispatchEvent(new Event('change'))
+    })
+  })
+
+  document.querySelectorAll('[data-jump]').forEach((card) => {
+    card.addEventListener('click', () => {
+      const [tab, filter] = card.dataset.jump.split(':')
+      if (filterValidated) filterValidated.value = filter
+      validationFilter = filter
+      renderObservationsTable()
+      renderSitesTable()
+      updateTabCounts()
+      updateSearchSuggestions()
+      activateTab(tab, { zoom: false })
+    })
+  })
 
   if (searchObsColumnEl) searchObsColumnEl.addEventListener('change', applyObsFilter)
   if (searchObs) searchObs.addEventListener('input', applyObsFilter)
   if (searchSitesColumnEl) searchSitesColumnEl.addEventListener('change', applySitesFilter)
   if (searchSites) searchSites.addEventListener('input', applySitesFilter)
 
-  if (btnShowObsOnMap) btnShowObsOnMap.addEventListener('click', () => {
-    const tabMap = document.querySelector('.tab[data-tab="map"]')
-    if (tabMap) tabMap.click()
-    setTimeout(() => { updateMap(); zoomMapToFiltered() }, 150)
-  })
-  if (btnShowSitesOnMap) btnShowSitesOnMap.addEventListener('click', () => {
-    const tabMap = document.querySelector('.tab[data-tab="map"]')
-    if (tabMap) tabMap.click()
-    setTimeout(() => { updateMap(); zoomMapToFiltered() }, 150)
-  })
+  const frameKind = (kind) => {
+    updateMap()
+    zoomMapToFiltered(kind)
+    document.getElementById('map')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }
+  if (btnShowObsOnMap) btnShowObsOnMap.addEventListener('click', () => frameKind('observation'))
+  if (btnShowSitesOnMap) btnShowSitesOnMap.addEventListener('click', () => frameKind('site'))
 
   if (mapShowObs) mapShowObs.addEventListener('change', updateMap)
   if (mapShowSites) mapShowSites.addEventListener('change', updateMap)
@@ -953,19 +1217,7 @@ function exportCsv(validatedOnly = false) {
 function setupTabs() {
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
-      const tabName = tab.dataset.tab
-      document.querySelectorAll('.tab').forEach(t => {
-        t.classList.toggle('active', t === tab)
-        t.setAttribute('aria-selected', t === tab ? 'true' : 'false')
-      })
-      document.querySelectorAll('.panel').forEach(p => {
-        const id = p.id
-        const active = (id === 'panelObservations' && tabName === 'observations') ||
-          (id === 'panelSites' && tabName === 'sites') ||
-          (id === 'panelMap' && tabName === 'map')
-        p.classList.toggle('active', active)
-      })
-      if (tabName === 'map') setTimeout(() => { updateMap(); zoomMapToSelection() }, 100)
+      activateTab(tab.dataset.tab, { zoom: tab.dataset.tab === 'map' })
     })
   })
 }
@@ -1032,15 +1284,8 @@ function bindSelectionToolbar() {
   if (byId('btnSiteDeselectAll')) byId('btnSiteDeselectAll').addEventListener('click', deselectAllSite)
   if (byId('btnSiteInvert')) byId('btnSiteInvert').addEventListener('click', invertSelectionSite)
   if (byId('btnZoomToSelection')) byId('btnZoomToSelection').addEventListener('click', () => {
-    const panelMap = document.getElementById('panelMap')
-    const mapTab = document.querySelector('.tab[data-tab="map"]')
-    if (panelMap && !panelMap.classList.contains('active') && mapTab) {
-      mapTab.click()
-      setTimeout(() => { updateMap(); zoomMapToSelection() }, 150)
-    } else {
-      updateMap()
-      zoomMapToSelection()
-    }
+    updateMap()
+    zoomMapToSelection()
   })
 }
 
